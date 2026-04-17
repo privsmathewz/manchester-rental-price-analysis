@@ -1,0 +1,361 @@
+<!-- index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Manchester Rental Pricing Analysis</title>
+  <meta
+    name="description"
+    content="A minimalist Manchester rental pricing analysis website with market pricing components, interactive charts, and predictive model metrics."
+  />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="page-shell">
+    <header class="hero">
+      <nav class="top-nav">
+        <div class="brand">
+          <div class="brand-dot"></div>
+          <span>Manchester Rental Pricing Analysis</span>
+        </div>
+
+        <div class="nav-links">
+          <a href="#framework">Framework</a>
+          <a href="#dashboard">Dashboard</a>
+          <a href="#model">Model</a>
+          <a href="#insights">Insights</a>
+        </div>
+      </nav>
+
+      <div class="hero-content">
+        <div class="hero-copy">
+          <span class="eyebrow">Manchester city-centre friendly pricing intelligence</span>
+          <h1>Price rental property with clarity, confidence, and real market logic.</h1>
+          <p>
+            A complete pricing framework for Manchester landlords, investors, and operators —
+            combining market comps, postcode demand, yields, operating costs, seasonality,
+            tenant trends, and predictive analysis in one clean dashboard.
+          </p>
+
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="#dashboard">Explore dashboard</a>
+            <a class="btn btn-secondary" href="#framework">View pricing framework</a>
+          </div>
+
+          <div class="hero-stats">
+            <div class="hero-stat">
+              <span class="hero-stat-value" id="heroAvgRent">--</span>
+              <span class="hero-stat-label">Average monthly rent</span>
+            </div>
+            <div class="hero-stat">
+              <span class="hero-stat-value" id="heroBestYield">--</span>
+              <span class="hero-stat-label">Highest yield postcode</span>
+            </div>
+            <div class="hero-stat">
+              <span class="hero-stat-value" id="heroModelR2">--</span>
+              <span class="hero-stat-label">Model R²</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="hero-panel">
+          <div class="hero-panel-card">
+            <div class="panel-top">
+              <span class="panel-label">Live pricing framework</span>
+              <span class="panel-chip">Minimal • Modern • Data-led</span>
+            </div>
+
+            <ul class="panel-list">
+              <li>Market comparisons and local rent benchmarks</li>
+              <li>Property-specific adjustments and neighbourhood premiums</li>
+              <li>Yield analysis, cash-flow logic, and operating cost awareness</li>
+              <li>Seasonality, tenant expectations, and performance monitoring</li>
+              <li>Interactive charts and predictive model evaluation</li>
+            </ul>
+
+            <div class="panel-footer">
+              Built for Manchester-focused rental decisions.
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section id="framework" class="section">
+        <div class="section-head">
+          <span class="section-kicker">Pricing framework</span>
+          <h2>What a comprehensive rental pricing analysis should include</h2>
+          <p>
+            These are the core building blocks behind accurate, competitive, and profitable
+            Manchester rental pricing.
+          </p>
+        </div>
+
+        <div class="cards-grid">
+          <article class="info-card">
+            <h3>Market Comparisons (Comps)</h3>
+            <p>
+              Benchmark against similar rentals in the same area using size, age, condition,
+              amenities, and exact location to establish a realistic market rent.
+            </p>
+          </article>
+
+          <article class="info-card">
+            <h3>Property-Specific Factors</h3>
+            <p>
+              Adjust for bedrooms, bathrooms, layout, finish, appliances, parking, outdoor
+              space, condition, and overall presentation quality.
+            </p>
+          </article>
+
+          <article class="info-card">
+            <h3>Location & Neighborhood Appeal</h3>
+            <p>
+              Factor in proximity to public transport, universities, schools, retail, parks,
+              safety, and city-centre accessibility.
+            </p>
+          </article>
+
+          <article class="info-card">
+            <h3>Economic & Market Conditions</h3>
+            <p>
+              Review vacancy, supply-demand pressure, local employment growth, inflation,
+              affordability, and wider financing conditions.
+            </p>
+          </article>
+
+          <article class="info-card">
+            <h3>Operating Costs & Financial Goals</h3>
+            <p>
+              Include mortgage, tax, insurance, service charge, maintenance, utilities, and
+              management fees. Align pricing with target yield and cash flow.
+            </p>
+          </article>
+
+          <article class="info-card">
+            <h3>Dynamic Pricing & Seasonality</h3>
+            <p>
+              Adapt pricing through the year based on student demand, summer peaks, local
+              events, and changes in market velocity.
+            </p>
+          </article>
+
+          <article class="info-card">
+            <h3>Tenant Preferences & Trends</h3>
+            <p>
+              Reflect features renters value most, including energy efficiency, smart tech,
+              pet-friendliness, balconies, and flexible working space.
+            </p>
+          </article>
+
+          <article class="info-card">
+            <h3>Legal & Regulatory Compliance</h3>
+            <p>
+              Ensure pricing, deposits, disclosures, and tenancy practices remain aligned with
+              applicable rules and fair housing standards.
+            </p>
+          </article>
+
+          <article class="info-card">
+            <h3>Data & Tools</h3>
+            <p>
+              Use pricing tools, property software, rental feeds, and internal dashboards to
+              continuously refine your pricing decisions.
+            </p>
+          </article>
+
+          <article class="info-card">
+            <h3>Performance Monitoring</h3>
+            <p>
+              Track occupancy, achieved rent, yield, lead quality, and enquiry response to
+              keep pricing optimized over time.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section id="dashboard" class="section section-dark">
+        <div class="section-head">
+          <span class="section-kicker">Interactive dashboard</span>
+          <h2>Manchester rental market explorer</h2>
+          <p>
+            Filter the sample dataset by postcode, property type, and date range to view
+            updated metrics and charts instantly.
+          </p>
+        </div>
+
+        <div class="filters-panel">
+          <div class="filter-group">
+            <label for="postcodeSelect">Postcodes</label>
+            <select id="postcodeSelect" multiple></select>
+          </div>
+
+          <div class="filter-group">
+            <label for="typeSelect">Property types</label>
+            <select id="typeSelect" multiple></select>
+          </div>
+
+          <div class="filter-group">
+            <label for="startMonth">Start month</label>
+            <select id="startMonth"></select>
+          </div>
+
+          <div class="filter-group">
+            <label for="endMonth">End month</label>
+            <select id="endMonth"></select>
+          </div>
+
+          <div class="filter-group filter-actions">
+            <label>&nbsp;</label>
+            <button id="resetFilters" class="btn btn-primary btn-block" type="button">
+              Reset filters
+            </button>
+          </div>
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <span class="kpi-label">Average monthly rent</span>
+            <strong class="kpi-value" id="avgRentMetric">--</strong>
+          </div>
+
+          <div class="kpi-card">
+            <span class="kpi-label">Highest yield postcode</span>
+            <strong class="kpi-value" id="highestYieldMetric">--</strong>
+          </div>
+
+          <div class="kpi-card">
+            <span class="kpi-label">Average yield</span>
+            <strong class="kpi-value" id="avgYieldMetric">--</strong>
+          </div>
+
+          <div class="kpi-card">
+            <span class="kpi-label">Records in view</span>
+            <strong class="kpi-value" id="recordsMetric">--</strong>
+          </div>
+        </div>
+
+        <div class="chart-grid">
+          <div class="chart-card">
+            <div class="chart-title-wrap">
+              <h3>Average Rent by Postcode</h3>
+              <p>Quick benchmark across selected Manchester areas.</p>
+            </div>
+            <canvas id="rentChart"></canvas>
+          </div>
+
+          <div class="chart-card">
+            <div class="chart-title-wrap">
+              <h3>Average Yield by Postcode</h3>
+              <p>See where income performance is strongest.</p>
+            </div>
+            <canvas id="yieldChart"></canvas>
+          </div>
+
+          <div class="chart-card chart-card-wide">
+            <div class="chart-title-wrap">
+              <h3>Monthly Rent Trend</h3>
+              <p>Track how average rents move through the selected period.</p>
+            </div>
+            <canvas id="trendChart"></canvas>
+          </div>
+
+          <div class="chart-card chart-card-wide">
+            <div class="chart-title-wrap">
+              <h3>Price vs Rent by Property Type</h3>
+              <p>Understand the relationship between capital value and achieved rent.</p>
+            </div>
+            <canvas id="scatterChart"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <section id="model" class="section">
+        <div class="section-head">
+          <span class="section-kicker">Model evaluation</span>
+          <h2>Regression model snapshot</h2>
+          <p>
+            These metrics reflect a sample linear regression model trained on the included
+            dataset using postcode, property type, price, yield, size, and distance features.
+          </p>
+        </div>
+
+        <div class="model-grid">
+          <div class="model-card">
+            <span class="model-label">Mean Absolute Error</span>
+            <strong class="model-value" id="modelMae">--</strong>
+            <p>
+              Lower is better. This represents the average prediction error in pounds.
+            </p>
+          </div>
+
+          <div class="model-card">
+            <span class="model-label">R² Score</span>
+            <strong class="model-value" id="modelR2">--</strong>
+            <p>
+              Higher is better. This shows how much rent variation is explained by the model.
+            </p>
+          </div>
+
+          <div class="model-card">
+            <span class="model-label">Interpretation</span>
+            <strong class="model-value model-value-text">Strong sample fit</strong>
+            <p>
+              Use this as a pricing support layer, not a replacement for local judgement and
+              live market evidence.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section id="insights" class="section section-accent">
+        <div class="section-head">
+          <span class="section-kicker">Decision notes</span>
+          <h2>How to use this website like a pricing analyst</h2>
+          <p>
+            Start with comps, apply property-level adjustments, compare yield performance,
+            review rent trends, then validate with your target return and tenant strategy.
+          </p>
+        </div>
+
+        <div class="steps-grid">
+          <div class="step-card">
+            <span class="step-number">01</span>
+            <h3>Benchmark</h3>
+            <p>Use postcode and property-type filters to anchor pricing against local rent evidence.</p>
+          </div>
+
+          <div class="step-card">
+            <span class="step-number">02</span>
+            <h3>Adjust</h3>
+            <p>Layer in finish, layout, parking, balcony, furnishing, and city-centre convenience.</p>
+          </div>
+
+          <div class="step-card">
+            <span class="step-number">03</span>
+            <h3>Validate</h3>
+            <p>Cross-check against yield, operating costs, enquiry quality, and expected void risk.</p>
+          </div>
+
+          <div class="step-card">
+            <span class="step-number">04</span>
+            <h3>Monitor</h3>
+            <p>Update pricing as market conditions, student demand, and occupancy performance shift.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>

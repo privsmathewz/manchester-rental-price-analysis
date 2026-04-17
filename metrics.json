@@ -1,0 +1,66 @@
+{
+  "mae": 5.0739428630723085,
+  "r2": 0.9993090569705217,
+  "avg_rent_by_postcode": [
+    {
+      "postcode": "M1",
+      "avg_rent_mean": 1220.5616666666667
+    },
+    {
+      "postcode": "M13",
+      "avg_rent_mean": 882.4008333333334
+    },
+    {
+      "postcode": "M14",
+      "avg_rent_mean": 919.2075
+    },
+    {
+      "postcode": "M3",
+      "avg_rent_mean": 1145.36
+    },
+    {
+      "postcode": "M5",
+      "avg_rent_mean": 981.6558333333334
+    }
+  ],
+  "avg_yield_by_postcode": [
+    {
+      "postcode": "M1",
+      "yield_percent_mean": 7.245
+    },
+    {
+      "postcode": "M13",
+      "yield_percent_mean": 7.069166666666667
+    },
+    {
+      "postcode": "M14",
+      "yield_percent_mean": 6.88
+    },
+    {
+      "postcode": "M3",
+      "yield_percent_mean": 7.199166666666667
+    },
+    {
+      "postcode": "M5",
+      "yield_percent_mean": 7.005833333333333
+    }
+  ],
+  "monthly_trend": [
+    {
+      "date": "2025-01",
+      "avg_rent": 1009.3526666666666
+    },
+    {
+      "date": "2025-04",
+      "avg_rent": 1020.98
+    },
+    {
+      "date": "2025-07",
+      "avg_rent": 1040.1186666666666
+    },
+    {
+      "date": "2025-10",
+      "avg_rent": 1048.8973333333333
+    }
+  ]
+}

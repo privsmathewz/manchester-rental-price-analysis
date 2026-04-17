@@ -1,1684 +1,1406 @@
-# streamlit_app.py
-# Manchester Rental Intelligence — Portfolio Edition
-# Author: Sajan Mathew, MSc Data Science, MMU
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
 import streamlit as st
-import plotly.express as px
-import plotly.graph_objects as go
 import pandas as pd
 import numpy as np
-from sklearn.linear_model import LinearRegression
+import plotly.express as px
+import plotly.graph_objects as go
+from typing import Dict, List, Tuple
 
-from src.analysis_utils import (
-    load_data, filter_data, compute_kpis,
-    compute_affordability_score, compute_best_areas,
-    compute_rent_by_postcode, compute_yield_by_postcode,
-    compute_monthly_trend, run_regression,
+from analysis_utils import (
+    load_data,
+    compute_average_rent_by_postcode,
+    compute_average_yield_by_postcode,
+    compute_monthly_trend,
+    prepare_features,
+    train_regression_model,
 )
 
 st.set_page_config(
-    page_title="Manchester Homes",
+    page_title="Manchester Rental Intelligence",
     page_icon="🏠",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 
-# ──────────────────────────────────────────────────────────────────────────────
-# THEME / STYLES
-# ──────────────────────────────────────────────────────────────────────────────
+# ── CSS ───────────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Syne:wght@700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
 
 :root {
-    --bg:      #060810;
-    --bg2:     #080d14;
-    --panel:   rgba(255,255,255,0.025);
-    --border:  rgba(255,255,255,0.06);
-    --green:   #00ff88;
-    --text:    #ffffff;
-    --muted:   #5a5870;
-    --dim:     #3a3850;
+  --bg:          #060810;
+  --bg-2:        #090c17;
+  --bg-card:     rgba(255,255,255,0.03);
+  --green:       #00ff88;
+  --green-dim:   rgba(0,255,136,0.12);
+  --green-glow:  rgba(0,255,136,0.35);
+  --green-line:  rgba(0,255,136,0.6);
+  --border:      rgba(255,255,255,0.06);
+  --text:        #dde2ef;
+  --text-dim:    rgba(221,226,239,0.45);
+  --radius:      14px;
 }
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
-
-html, body, [class*="css"] {
-    font-family: 'Space Grotesk', sans-serif;
-    background-color: #080810;
-    color: #d4d2e0 !important;
-    -webkit-font-smoothing: antialiased;
+@keyframes fadeInUp {
+  from { opacity:0; transform:translateY(18px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+@keyframes pulseGlow {
+  0%,100% { box-shadow: 0 0 0 rgba(0,255,136,0); }
+  50%     { box-shadow: 0 0 28px rgba(0,255,136,0.14); }
+}
+@keyframes borderShimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+@keyframes scanMove {
+  0%   { background-position: 0 0; }
+  100% { background-position: 0 120px; }
 }
 
-.main { background: transparent; }
-.block-container {
-    max-width: 100% !important;
-    padding: 0 1.8rem 2rem 1.8rem !important;
+.stApp {
+  background: var(--bg) !important;
+  font-family: 'Space Grotesk', sans-serif !important;
+  color: var(--text) !important;
 }
 
-header[data-testid="stHeader"] { display: none !important; }
-section[data-testid="stSidebar"] { display: none !important; }
-[data-testid="collapsedControl"] { display: none !important; }
-
-/* ── NAVBAR ─────────────────────────────────────────────────────────────── */
-.navbar {
-    position: sticky;
-    top: 0;
-    z-index: 999;
-    height: 60px;
-    margin: 0 -1.8rem;
-    padding: 0 2rem;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    background: #060810;
-    border-bottom: 1px solid rgba(0,255,136,0.15);
-}
-.nav-brand {
-    font-family: 'Syne', sans-serif;
-    font-size: 1rem;
-    font-weight: 800;
-    color: #00ff88;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-}
-.nav-stats {
-    display: flex;
-    gap: 32px;
-}
-.nav-stat-num {
-    font-family: 'Syne', sans-serif;
-    font-size: 0.9rem;
-    font-weight: 700;
-    color: #00ff88 !important;
-    line-height: 1;
-    text-align: center;
-}
-.nav-stat-label {
-    font-size: 0.6rem;
-    color: #5a5870 !important;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    text-align: center;
-    margin-top: 3px;
+[data-testid="stAppViewContainer"]::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg, transparent 0px, transparent 3px,
+    rgba(0,0,0,0.03) 3px, rgba(0,0,0,0.03) 4px
+  );
+  pointer-events: none;
+  z-index: 9999;
+  animation: scanMove 6s linear infinite;
 }
 
-/* ── HERO ────────────────────────────────────────────────────────────────── */
-.hero {
-    background: linear-gradient(180deg, #080d14 0%, #060810 60%);
-    padding: 48px 0 32px 0;
-    position: relative;
-    margin-bottom: 24px;
+.main .block-container {
+  padding: 2.5rem 3.5rem 4rem !important;
+  max-width: 1480px !important;
+}
+
+h1 {
+  font-family: 'Syne', sans-serif !important;
+  font-size: clamp(2.2rem,4vw,3.6rem) !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.025em !important;
+  line-height: 1.08 !important;
+  background: linear-gradient(118deg,#ffffff 20%,#b0ffd8 55%,var(--green) 100%) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  background-clip: text !important;
+  margin-bottom: 0.25rem !important;
+  animation: fadeInUp 0.55s cubic-bezier(0.22,1,0.36,1) both;
+}
+
+h2 {
+  font-family: 'Syne', sans-serif !important;
+  font-size: 1.3rem !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.015em !important;
+  color: #ffffff !important;
+  padding-left: 1rem !important;
+  border-left: 3px solid var(--green) !important;
+  margin-top: 2rem !important;
+  margin-bottom: 1rem !important;
+  animation: fadeInUp 0.55s cubic-bezier(0.22,1,0.36,1) 0.1s both;
+}
+
+h3 {
+  font-family: 'Syne', sans-serif !important;
+  font-size: 1.1rem !important;
+  font-weight: 600 !important;
+  color: #ffffff !important;
+  animation: fadeInUp 0.55s cubic-bezier(0.22,1,0.36,1) 0.12s both;
+}
+
+p, li, label, .stMarkdown {
+  font-family: 'Space Grotesk', sans-serif !important;
+  color: var(--text) !important;
+  line-height: 1.65 !important;
+  font-size: 14px !important;
+}
+
+[data-testid="stMetric"] {
+  background: var(--bg-card) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius) !important;
+  padding: 20px !important;
+  backdrop-filter: blur(16px) saturate(140%) !important;
+  position: relative !important;
+  overflow: hidden !important;
+  transition: transform 0.28s cubic-bezier(0.22,1,0.36,1), box-shadow 0.28s ease !important;
+  animation: fadeInUp 0.6s cubic-bezier(0.22,1,0.36,1) 0.15s both,
+             pulseGlow 4s ease-in-out 1.2s infinite !important;
+  min-height: 110px !important;
+}
+[data-testid="stMetric"]::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent 0%, var(--green-line) 40%,
+              var(--green) 50%, var(--green-line) 60%, transparent 100%);
+  background-size: 200% 100%;
+  animation: borderShimmer 3s linear infinite;
+}
+[data-testid="stMetric"]:hover {
+  transform: translateY(-3px) !important;
+  border-color: rgba(0,255,136,0.22) !important;
+  box-shadow: 0 0 24px var(--green-glow), 0 12px 40px rgba(0,0,0,0.55) !important;
+}
+[data-testid="stMetricLabel"] > div {
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.1em !important;
+  text-transform: uppercase !important;
+  color: #6b7280 !important;
+}
+[data-testid="stMetricValue"] > div {
+  font-family: 'Syne', sans-serif !important;
+  font-size: 28px !important;
+  font-weight: 700 !important;
+  color: var(--green) !important;
+  letter-spacing: -0.02em !important;
+  line-height: 1.15 !important;
+}
+
+[data-testid="stTabs"] [data-baseweb="tab-list"] {
+  background: transparent !important;
+  border-bottom: 1px solid var(--border) !important;
+  gap: 0 !important; padding: 0 !important;
+}
+[data-testid="stTabs"] [data-baseweb="tab"] {
+  font-family: 'Space Grotesk', sans-serif !important;
+  font-weight: 500 !important;
+  font-size: 0.85rem !important;
+  letter-spacing: 0.05em !important;
+  color: var(--text-dim) !important;
+  background: transparent !important;
+  border: none !important;
+  border-bottom: 2px solid transparent !important;
+  padding: 0.8rem 1.6rem !important;
+  margin-bottom: -1px !important;
+  transition: color 0.2s, border-color 0.2s, background 0.2s !important;
+  border-radius: 6px 6px 0 0 !important;
+}
+[data-testid="stTabs"] [data-baseweb="tab"]:hover {
+  color: var(--text) !important;
+  background: rgba(0,255,136,0.05) !important;
+}
+[data-testid="stTabs"] [aria-selected="true"] {
+  color: var(--green) !important;
+  border-bottom: 2px solid var(--green) !important;
+  background: var(--green-dim) !important;
+}
+
+[data-testid="stSidebar"] {
+  background: var(--bg-2) !important;
+  border-right: 1px solid var(--border) !important;
+}
+[data-testid="stSidebar"] h1,
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3 {
+  -webkit-text-fill-color: var(--text) !important;
+  border-left: 2px solid var(--green) !important;
+  padding-left: 0.6rem !important;
+  font-size: 0.8rem !important;
+}
+
+[data-baseweb="select"] > div,
+[data-baseweb="input"] > div {
+  background: rgba(255,255,255,0.04) !important;
+  border-color: var(--border) !important;
+  border-radius: 8px !important;
+  font-family: 'Space Grotesk', sans-serif !important;
+}
+
+.stButton > button {
+  font-family: 'Space Grotesk', sans-serif !important;
+  font-weight: 600 !important;
+  font-size: 0.85rem !important;
+  letter-spacing: 0.04em !important;
+  border-radius: 8px !important;
+  border: 1px solid var(--border) !important;
+  background: var(--bg-card) !important;
+  color: var(--text) !important;
+  padding: 0.5rem 1.25rem !important;
+  transition: all 0.25s ease !important;
+}
+.stButton > button:hover {
+  border-color: var(--green) !important;
+  color: var(--green) !important;
+  box-shadow: 0 0 14px var(--green-dim) !important;
+  background: rgba(0,255,136,0.06) !important;
+}
+
+hr { border-color: var(--border) !important; margin: 1.8rem 0 !important; }
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--green); }
+
+[data-testid="stAlert"] {
+  border-radius: var(--radius) !important;
+  border-left: 3px solid var(--green) !important;
+  background: var(--green-dim) !important;
+}
+
+/* ── Hero ──────────────────────────────────────────────────────────────────── */
+.hero-wrap {
+  background: linear-gradient(135deg, #0f0f23 0%, #1a1a3e 100%);
+  border-radius: 16px;
+  padding: 48px 40px 36px;
+  margin-bottom: 8px;
+  border: 1px solid rgba(255,255,255,0.05);
+  animation: fadeInUp 0.5s ease both;
 }
 .hero-eyebrow {
-    font-size: 0.65rem;
-    color: #4a4860 !important;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    margin-bottom: 12px;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  color: #00ff88;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+  font-weight: 600;
 }
 .hero-headline {
-    font-family: 'Syne', sans-serif;
-    font-size: 2.8rem;
-    font-weight: 800;
-    letter-spacing: -0.02em;
-    line-height: 1.05;
-    color: #ffffff !important;
-    margin-bottom: 16px;
+  font-family: 'Syne', sans-serif;
+  font-size: clamp(2.8rem,5.5vw,4.5rem);
+  font-weight: 800;
+  background: linear-gradient(118deg,#ffffff 20%,#b0ffd8 55%,#00ff88 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1.0;
+  margin-bottom: 16px;
+  letter-spacing: -0.03em;
 }
-.hero-headline .accent { color: #00ff88 !important; }
 .hero-sub {
-    font-size: 0.92rem;
-    color: #7a7a8a !important;
-    line-height: 1.7;
-    max-width: 480px;
+  font-size: 16px;
+  color: #c4c9e2;
+  max-width: 680px;
+  line-height: 1.65;
+  margin: 0;
 }
 
-/* ── FILTER PILLS ────────────────────────────────────────────────────────── */
-.filter-shell {
-    background: rgba(0,255,136,0.04);
-    border: 1px solid rgba(0,255,136,0.1);
-    border-radius: 14px;
-    padding: 14px 18px;
-    margin: 0 0 20px 0;
+/* ── Market Pulse ─────────────────────────────────────────────────────────── */
+.pulse-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin: 20px 0 28px;
 }
-.filter-label {
-    font-size: 0.65rem;
-    color: #3a3850;
-    text-transform: uppercase;
-    letter-spacing: 0.15em;
-    font-weight: 700;
-    margin-bottom: 10px;
+.pulse-card {
+  background: #1a1a2e;
+  border: 1px solid #2a2a5a;
+  border-radius: 12px;
+  padding: 18px 20px;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
-.filter-summary {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    margin-top: 10px;
+.pulse-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #00ff88, transparent);
 }
-.summary-pill {
-    background: rgba(0,255,136,0.06);
-    border: 1px solid rgba(0,255,136,0.15);
-    border-radius: 5px;
-    color: #00ff88 !important;
-    font-size: 0.72rem;
-    padding: 4px 10px;
-    font-weight: 600;
+.pulse-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(0,255,136,0.1);
+}
+.pulse-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  color: #00ff88;
+  text-transform: uppercase;
+  margin-bottom: 7px;
+}
+.pulse-value {
+  font-family: 'Syne', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 3px;
+  word-break: break-word;
+}
+.pulse-sub { font-size: 11px; color: #6b7280; }
+.pulse-up   { color: #00ff88 !important; }
+.pulse-flat { color: #f59e0b !important; }
+
+/* ── Section container ────────────────────────────────────────────────────── */
+.section-wrap {
+  background: #0d0d1a;
+  border: 1px solid #1e1e3a;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
 }
 
-/* ── EXPANDER ────────────────────────────────────────────────────────────── */
-[data-testid="stExpander"] {
-    background: transparent !important;
-    border: 1px solid rgba(0,255,136,0.15) !important;
-    border-radius: 10px !important;
-    margin: 16px 0 !important;
+/* ── Insight callout ─────────────────────────────────────────────────────── */
+.insight {
+  background: #111128;
+  border-left: 3px solid #00ff88;
+  border-radius: 0 8px 8px 0;
+  padding: 12px 16px;
+  margin: 10px 0 18px;
+  font-size: 14px;
+  color: #dde2ef;
+  line-height: 1.6;
 }
-[data-testid="stExpander"]:hover {
-    border-color: rgba(0,255,136,0.35) !important;
+.insight-icon { color: #00ff88; margin-right: 6px; }
+
+/* ── Recommendation card ─────────────────────────────────────────────────── */
+.rec-card {
+  background: linear-gradient(135deg, #0d0d1a 0%, #0f1a0f 100%);
+  border: 1px solid #00ff88;
+  border-radius: 16px;
+  padding: 28px;
+  margin-bottom: 24px;
+  box-shadow: 0 0 40px rgba(0,255,136,0.07), inset 0 1px 0 rgba(0,255,136,0.08);
 }
-[data-testid="stExpander"] summary {
-    color: #00ff88 !important;
-    font-size: 0.75rem !important;
-    font-weight: 700 !important;
-    letter-spacing: 0.12em !important;
-    text-transform: uppercase !important;
-    padding: 12px 16px !important;
+.rec-postcode {
+  font-family: 'Syne', sans-serif;
+  font-size: 58px;
+  font-weight: 800;
+  color: #00ff88;
+  line-height: 1;
+  margin-bottom: 2px;
 }
-[data-testid="stExpander"] > div > div {
-    background: rgba(255,255,255,0.02) !important;
-    border-top: 1px solid rgba(255,255,255,0.05) !important;
-    padding: 16px !important;
+.rec-title {
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  color: #6b7280;
+  text-transform: uppercase;
+  margin-bottom: 20px;
+}
+.rec-reason {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  font-size: 14px;
+  color: #dde2ef;
+  line-height: 1.55;
+}
+.rec-reason:last-child { border-bottom: none; }
+.rec-bullet { color: #00ff88; font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+.rec-badge {
+  display: inline-block;
+  background: rgba(0,255,136,0.1);
+  border: 1px solid rgba(0,255,136,0.3);
+  color: #00ff88;
+  border-radius: 20px;
+  padding: 3px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  margin-bottom: 12px;
 }
 
-/* ── FILTER LABELS ───────────────────────────────────────────────────────── */
-.stMultiSelect label,
-.stDateInput label {
-    color: #3a3850 !important;
-    font-size: 0.68rem !important;
-    text-transform: uppercase !important;
-    letter-spacing: 0.1em !important;
-    font-weight: 700 !important;
-    margin-bottom: 6px !important;
+/* ── Ranking rows ────────────────────────────────────────────────────────── */
+.rank-row {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  transition: background 0.2s;
+}
+.rank-row:hover { background: rgba(0,255,136,0.03); }
+.rank-row-1 { border-color: rgba(0,255,136,0.25) !important; }
+.rank-num {
+  font-family: 'Syne', sans-serif;
+  font-size: 26px;
+  font-weight: 800;
+  color: rgba(221,226,239,0.13);
+  width: 32px;
+  flex-shrink: 0;
+  text-align: center;
+}
+.rank-num-1 { color: #00ff88 !important; }
+.rank-pc {
+  font-family: 'Syne', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: #ffffff;
+  min-width: 52px;
+}
+.rank-stats {
+  display: flex;
+  gap: 20px;
+  flex: 1;
+  flex-wrap: wrap;
+}
+.rank-stat { display: flex; flex-direction: column; }
+.rank-stat-lbl {
+  font-size: 10px;
+  color: #6b7280;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.rank-stat-val { font-size: 13px; font-weight: 600; color: #dde2ef; }
+.rank-score-badge {
+  background: rgba(0,255,136,0.1);
+  color: #00ff88;
+  border: 1px solid rgba(0,255,136,0.25);
+  border-radius: 6px;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 700;
 }
 
-/* ── MULTISELECT INPUT ───────────────────────────────────────────────────── */
-[data-baseweb="select"] > div {
-    background: rgba(255,255,255,0.03) !important;
-    border: 1px solid rgba(255,255,255,0.08) !important;
-    border-radius: 8px !important;
+/* ── Predictor ───────────────────────────────────────────────────────────── */
+.pred-in-card {
+  background: #0d0d1a;
+  border: 1px solid #00ff88;
+  border-radius: 16px;
+  padding: 24px 28px;
 }
-[data-baseweb="select"] > div:hover {
-    border-color: rgba(0,255,136,0.25) !important;
+.pred-in-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: #00ff88;
+  text-transform: uppercase;
+  margin-bottom: 20px;
 }
-
-/* ── FILTER TAGS — NO RED, NO ORANGE ─────────────────────────────────────── */
-[data-baseweb="tag"] {
-    background: rgba(0,255,136,0.08) !important;
-    border: 1px solid rgba(0,255,136,0.2) !important;
-    border-radius: 5px !important;
-    color: #00ff88 !important;
-    font-size: 0.72rem !important;
-    padding: 2px 8px !important;
-    font-weight: 600 !important;
+.pred-out-card {
+  background: linear-gradient(135deg, #0a1a10 0%, #0d0d1a 100%);
+  border: 1px solid #00ff88;
+  border-radius: 16px;
+  padding: 32px 28px;
+  text-align: center;
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
-[data-baseweb="tag"] span { color: #00ff88 !important; }
-[data-baseweb="tag"] button {
-    color: rgba(0,255,136,0.5) !important;
-    padding: 0 2px !important;
+.pred-out-label {
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: #6b7280;
+  text-transform: uppercase;
+  margin-bottom: 8px;
 }
-[data-baseweb="tag"] button:hover { color: #00ff88 !important; }
-[data-baseweb="tag"] svg { fill: #00ff88 !important; }
-
-/* ── DATE INPUT ──────────────────────────────────────────────────────────── */
-.stDateInput input {
-    background: rgba(255,255,255,0.03) !important;
-    border: 1px solid rgba(255,255,255,0.08) !important;
-    border-radius: 8px !important;
-    color: #e8e6f0 !important;
-    font-size: 0.82rem !important;
+.pred-out-value {
+  font-family: 'Syne', sans-serif;
+  font-size: 60px;
+  font-weight: 800;
+  color: #00ff88;
+  line-height: 1;
+  margin-bottom: 6px;
 }
-
-/* ── DROPDOWN POPOVER ────────────────────────────────────────────────────── */
-[data-baseweb="popover"] > div {
-    background: #0d0d18 !important;
-    border: 1px solid rgba(255,255,255,0.08) !important;
-    border-radius: 10px !important;
+.pred-out-range {
+  font-size: 14px;
+  color: #a0aec0;
+  margin-bottom: 16px;
 }
-[role="option"] {
-    color: #5a5870 !important;
-    font-size: 0.82rem !important;
-    background: transparent !important;
+.pred-out-cmp {
+  background: rgba(0,255,136,0.08);
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 14px;
+  color: #00ff88;
+  margin-bottom: 16px;
 }
-[role="option"]:hover {
-    background: rgba(0,255,136,0.06) !important;
-    color: #00ff88 !important;
+.pred-out-note {
+  font-size: 11px;
+  color: #6b7280;
+  line-height: 1.65;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255,255,255,0.05);
 }
-
-/* ── KPI CARDS ───────────────────────────────────────────────────────────── */
-.kpi-card {
-    background: rgba(255,255,255,0.025);
-    border: 1px solid rgba(255,255,255,0.06);
-    border-top: 2px solid rgba(255,255,255,0.1);
-    border-radius: 10px;
-    padding: 18px 20px 16px 20px;
-    min-height: 110px;
+.pred-out-warn {
+  font-size: 11px;
+  color: #f59e0b;
+  margin-top: 6px;
 }
-.kpi-card.green {
-    border-top: 2px solid #00ff88;
+.pred-empty {
+  color: rgba(221,226,239,0.25);
+  font-size: 14px;
+  text-align: center;
+  padding: 40px 20px;
 }
-.kpi-val {
-    font-family: 'Syne', sans-serif;
-    font-size: 2rem;
-    font-weight: 800;
-    color: #ffffff !important;
-    display: block;
-    line-height: 1;
-    margin-bottom: 8px;
+.pred-btn button {
+  background: #00ff88 !important;
+  color: #000 !important;
+  border: none !important;
+  font-weight: 700 !important;
+  font-size: 14px !important;
+  width: 100% !important;
+  border-radius: 8px !important;
+  padding: 0.65rem 1.5rem !important;
+  transition: all 0.2s !important;
 }
-.kpi-val.green { color: #00ff88 !important; }
-.kpi-lbl {
-    font-size: 0.65rem;
-    color: #6a6880 !important;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    font-weight: 700;
-    display: block;
-    margin-bottom: 6px;
-}
-.kpi-sub {
-    font-size: 0.78rem;
-    color: #5a5870 !important;
-    line-height: 1.5;
-    display: block;
+.pred-btn button:hover {
+  background: #00cc6a !important;
+  box-shadow: 0 0 20px rgba(0,255,136,0.3) !important;
 }
 
-/* ── INSIGHT CARDS ───────────────────────────────────────────────────────── */
-.insight-card {
-    background: rgba(255,255,255,0.025);
-    border: 1px solid rgba(255,255,255,0.06);
-    border-radius: 10px;
-    padding: 16px;
-    height: 100%;
+/* ── Map ranking panel cards ─────────────────────────────────────────────── */
+.map-card {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  transition: background 0.2s;
 }
-.insight-title {
-    font-size: 0.62rem;
-    color: #5a5870 !important;
-    text-transform: uppercase;
-    letter-spacing: 0.14em;
-    font-weight: 700;
-    margin-bottom: 8px;
+.map-card:hover { background: rgba(0,255,136,0.04); }
+.map-card-pc {
+  font-family: 'Syne', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
 }
-.insight-big {
-    font-family: 'Syne', sans-serif;
-    font-size: 1.05rem;
-    font-weight: 700;
-    color: #ffffff !important;
-    line-height: 1.3;
-    margin-bottom: 8px;
-}
-.insight-copy {
-    font-size: 0.83rem;
-    color: #8a8a9a !important;
-    line-height: 1.7;
+.map-card-stats { font-size: 12px; color: #a0aec0; margin-top: 4px; }
+.map-rank-badge {
+  float: right;
+  background: rgba(0,255,136,0.1);
+  border: 1px solid rgba(0,255,136,0.25);
+  color: #00ff88;
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
 }
 
-/* ── SECTION HEADINGS ────────────────────────────────────────────────────── */
-.sec {
-    font-family: 'Syne', sans-serif;
-    font-size: 1.3rem;
-    font-weight: 800;
-    color: #ffffff !important;
-    margin: 24px 0 6px 0;
+/* ── Persona sidebar ─────────────────────────────────────────────────────── */
+.sidebar-logo {
+  font-family: 'Syne', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: #00ff88;
+  padding: 4px 0 12px;
 }
-.sec-desc {
-    font-size: 0.86rem;
-    color: #7a7a8a !important;
-    margin-bottom: 20px;
-    line-height: 1.7;
-    max-width: 800px;
+.sidebar-lbl {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: rgba(221,226,239,0.3);
+  text-transform: uppercase;
+  margin-bottom: 6px;
 }
-.mini-label {
-    font-size: 0.65rem;
-    color: #3a3850;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    font-weight: 700;
-    margin-bottom: 8px;
+.persona-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 20px;
+  border: 1px solid;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  margin-top: 8px;
 }
-
-/* ── TABS ────────────────────────────────────────────────────────────────── */
-.stTabs [data-baseweb="tab-list"] {
-    background: rgba(255,255,255,0.02) !important;
-    border: 1px solid rgba(255,255,255,0.06) !important;
-    border-radius: 10px !important;
-    padding: 4px !important;
-    gap: 3px !important;
-    width: 100% !important;
-    display: flex !important;
-}
-.stTabs [data-baseweb="tab"] {
-    flex: 1 !important;
-    text-align: center !important;
-    justify-content: center !important;
-    color: #6a6880 !important;
-    border-radius: 8px !important;
-    font-size: 0.8rem !important;
-    font-family: 'Space Grotesk', sans-serif !important;
-    font-weight: 600 !important;
-    letter-spacing: 0.06em !important;
-    padding: 10px 0 !important;
-}
-.stTabs [aria-selected="true"] {
-    background: #00ff88 !important;
-    color: #060810 !important;
-    font-weight: 700 !important;
+.sidebar-footer {
+  font-size: 11px;
+  color: rgba(221,226,239,0.25);
+  line-height: 1.65;
+  padding-top: 8px;
 }
 
-/* ── INFO BOXES ──────────────────────────────────────────────────────────── */
-.info-box {
-    background: rgba(0,255,136,0.03);
-    border-left: 3px solid #00ff88;
-    border-radius: 0 8px 8px 0;
-    padding: 14px 18px;
-    margin: 14px 0 18px 0;
-    color: #9a9aaa !important;
-    line-height: 1.75;
-    font-size: 0.86rem;
+/* ── Footer ──────────────────────────────────────────────────────────────── */
+.page-footer {
+  border-top: 1px solid #00ff88;
+  margin-top: 60px;
+  padding: 20px 0 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
 }
-.info-box strong { color: #00ff88 !important; }
+.footer-col { font-size: 13px; color: #6b7280; }
+.footer-col a { color: #6b7280; text-decoration: none; }
+.footer-col a:hover { color: #00ff88; }
+.footer-mid { font-weight: 600; }
 
-/* ── METRICS ─────────────────────────────────────────────────────────────── */
-[data-testid="stMetric"] {
-    background: rgba(255,255,255,0.025);
-    border: 1px solid rgba(255,255,255,0.06);
-    border-radius: 10px;
-    padding: 16px;
-}
-[data-testid="stMetricValue"] {
-    color: #00ff88 !important;
-    font-family: 'Space Grotesk', sans-serif !important;
-    font-weight: 700 !important;
-}
-[data-testid="stMetricLabel"] { color: #5a5870 !important; }
-
-/* ── BUTTONS ─────────────────────────────────────────────────────────────── */
-.stDownloadButton > button {
-    background: transparent !important;
-    color: #00ff88 !important;
-    border: 1px solid rgba(0,255,136,0.28) !important;
-    border-radius: 10px !important;
-    padding: 0.55rem 1rem !important;
-    font-weight: 700 !important;
-    font-family: 'Space Grotesk', sans-serif !important;
-}
-.stDownloadButton > button:hover {
-    background: rgba(0,255,136,0.07) !important;
-    border-color: #00ff88 !important;
-}
-.stCheckbox label { color: #5a5870 !important; }
-
-/* ── LEGEND ──────────────────────────────────────────────────────────────── */
-.legend {
-    display: flex;
-    gap: 18px;
-    flex-wrap: wrap;
-    margin-bottom: 14px;
-}
-.legend-item {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    color: #5a5870;
-    font-size: 0.8rem;
-}
-.dot { width: 9px; height: 9px; border-radius: 50%; }
-
-hr {
-    border-color: rgba(255,255,255,0.05) !important;
-    margin: 24px 0 !important;
-}
-
-/* ── FOOTER ──────────────────────────────────────────────────────────────── */
-.footer {
-    margin-top: 48px;
-    padding: 28px 0 12px 0;
-    border-top: 1px solid rgba(255,255,255,0.04);
-    text-align: center;
-    color: #5a5870 !important;
-    font-size: 0.8rem;
-    line-height: 2;
-}
-.footer a { color: #00ff88 !important; text-decoration: none; }
-.footer-brand {
-    font-family: 'Syne', sans-serif;
-    font-size: 0.95rem;
-    font-weight: 700;
-    color: #ffffff !important;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    margin-bottom: 4px;
-}
-
-/* ── GENERAL TEXT READABILITY ────────────────────────────────────────────── */
-p, div, span, label { color: inherit; }
-.stMarkdown p {
-    color: #c4c2d0 !important;
-    font-size: 0.9rem;
-    line-height: 1.7;
-}
-/* ── DATAFRAME — premium dark table ─────────────────────────────────────── */
-[data-testid="stDataFrame"] {
-    border: 1px solid rgba(255,255,255,0.06) !important;
-    border-radius: 12px !important;
-    overflow: hidden !important;
-}
-[data-testid="stDataFrame"] table {
-    border-collapse: collapse !important;
-    width: 100% !important;
-    font-family: 'Space Grotesk', sans-serif !important;
-}
-[data-testid="stDataFrame"] thead tr {
-    background: rgba(0,255,136,0.04) !important;
-    border-bottom: 1px solid rgba(0,255,136,0.12) !important;
-}
-[data-testid="stDataFrame"] thead th {
-    color: #00ff88 !important;
-    font-size: 0.65rem !important;
-    font-weight: 700 !important;
-    text-transform: uppercase !important;
-    letter-spacing: 0.12em !important;
-    padding: 12px 16px !important;
-    border: none !important;
-    background: transparent !important;
-}
-[data-testid="stDataFrame"] tbody tr {
-    border-bottom: 1px solid rgba(255,255,255,0.04) !important;
-    transition: background 0.15s !important;
-}
-[data-testid="stDataFrame"] tbody tr:hover {
-    background: rgba(0,255,136,0.03) !important;
-}
-[data-testid="stDataFrame"] tbody td {
-    color: #c4c2d0 !important;
-    font-size: 0.84rem !important;
-    padding: 11px 16px !important;
-    border: none !important;
-    background: transparent !important;
-    font-weight: 400 !important;
-}
-[data-testid="stDataFrame"] tbody tr:first-child td {
-    color: #ffffff !important;
-    font-weight: 600 !important;
-}
-[data-testid="stDataFrame"] tbody tr:nth-child(1) td:last-child {
-    color: #00ff88 !important;
-    font-weight: 700 !important;
-}
-[data-testid="stDataFrame"] tbody tr:nth-child(2) td:last-child {
-    color: #00ff88 !important;
-    font-weight: 600 !important;
-}
-[data-testid="stDataFrame"] tbody tr:nth-child(3) td:last-child {
-    color: #4a9eff !important;
-    font-weight: 600 !important;
-}
-[data-testid="stDataFrame"] tbody tr td:first-child {
-    color: #3a3850 !important;
-    font-size: 0.75rem !important;
-    font-weight: 500 !important;
-}
-[data-testid="stDataFrame"] ::-webkit-scrollbar {
-    width: 4px !important;
-    height: 4px !important;
-}
-[data-testid="stDataFrame"] ::-webkit-scrollbar-track {
-    background: rgba(255,255,255,0.02) !important;
-}
-[data-testid="stDataFrame"] ::-webkit-scrollbar-thumb {
-    background: rgba(0,255,136,0.2) !important;
-    border-radius: 4px !important;
-}
-
-/* ── MAP POLISH ──────────────────────────────────────────────────────────── */
-.mapboxgl-map {
-    border-radius: 10px !important;
-}
-[data-testid="stPlotlyChart"] {
-    border-radius: 10px !important;
-    overflow: hidden !important;
-}
-[data-testid="column"] {
-    padding: 0 8px !important;
-}
-.element-container:has([data-testid="stPlotlyChart"]):hover {
-    filter: brightness(1.05) !important;
-    transition: filter 0.3s ease !important;
-}
-
-/* ── RESPONSIVE ──────────────────────────────────────────────────────────── */
-@media (max-width: 900px) {
-    .hero-headline { font-size: 2.4rem; }
-    .nav-stats { gap: 16px; }
+/* ── Mobile ──────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .main .block-container { padding: 1.5rem 1rem 3rem !important; }
+  .pulse-grid { grid-template-columns: repeat(2,1fr); }
+  .hero-wrap  { padding: 28px 18px 22px; }
+  .hero-headline { font-size: 2.4rem; }
+  .rec-postcode  { font-size: 38px; }
+  .pred-out-value { font-size: 40px; }
+  .rank-stats { flex-direction: column; gap: 6px; }
+  .page-footer { flex-direction: column; text-align: center; }
+  .pred-in-card, .pred-out-card { padding: 18px; }
 }
 </style>
 """, unsafe_allow_html=True)
 
-# ──────────────────────────────────────────────────────────────────────────────
-# CHART HELPER
-# ──────────────────────────────────────────────────────────────────────────────
-def chart(fig, title="", height=None):
-    updates = dict(
-        paper_bgcolor="#0d0d18",
-        plot_bgcolor="#0d0d18",
-        font=dict(color="#5a5870", family="Space Grotesk"),
-        margin=dict(l=16, r=16, t=46 if title else 16, b=16),
-        hoverlabel=dict(
-            bgcolor="#12121f",
-            bordercolor="#00ff88",
-            font_color="#ffffff",
-            font_family="Space Grotesk",
-        ),
-        xaxis=dict(
-            gridcolor="rgba(255,255,255,0.03)",
-            zeroline=False,
-            title_font=dict(color="#5a5870"),
-            tickfont=dict(color="#5a5870"),
-        ),
-        yaxis=dict(
-            gridcolor="rgba(255,255,255,0.03)",
-            zeroline=False,
-            title_font=dict(color="#5a5870"),
-            tickfont=dict(color="#5a5870"),
-        ),
-        legend=dict(
-            bgcolor="rgba(0,0,0,0)",
-            font=dict(color="#5a5870"),
-        ),
+
+# ── Constants ─────────────────────────────────────────────────────────────────
+POSTCODE_COORDS: Dict[str, Tuple[float, float]] = {
+    'M1':  (53.476, -2.230),
+    'M3':  (53.484, -2.249),
+    'M5':  (53.473, -2.273),
+    'M13': (53.461, -2.209),
+    'M14': (53.449, -2.220),
+}
+PERSONA_TYPES: Dict[str, List[str]] = {
+    'Student':      ['HMO', '1-bed'],
+    'Professional': ['1-bed'],
+    'Investor':     ['Studio', '1-bed', 'HMO'],
+    'Explorer':     ['Studio', '1-bed', 'HMO'],
+}
+PERSONA_COLOUR: Dict[str, str] = {
+    'Student':      '#4f9cf9',
+    'Professional': '#f97316',
+    'Investor':     '#a855f7',
+    'Explorer':     '#00ff88',
+}
+
+
+# ── Cached data & model ───────────────────────────────────────────────────────
+@st.cache_data
+def load_dataset() -> pd.DataFrame:
+    return load_data('data/sample_rental_data_small.csv')
+
+
+@st.cache_resource
+def get_model():
+    df = load_data('data/sample_rental_data_small.csv')
+    X, y, preprocessor = prepare_features(df)
+    model, metrics = train_regression_model(X, y)
+    return model, metrics, preprocessor
+
+
+# ── Helper functions ──────────────────────────────────────────────────────────
+def _norm(s: pd.Series) -> pd.Series:
+    mn, mx = s.min(), s.max()
+    return pd.Series([0.5] * len(s), index=s.index) if mx == mn else (s - mn) / (mx - mn)
+
+
+def _norm_inv(s: pd.Series) -> pd.Series:
+    return 1 - _norm(s)
+
+
+def compute_rankings(df: pd.DataFrame, persona: str) -> pd.DataFrame:
+    g = df.groupby('postcode').agg(
+        avg_rent=('avg_rent', 'mean'),
+        avg_price=('avg_price', 'mean'),
+        yield_pct=('yield_percent', 'mean'),
+        dist_city=('distance_to_city_center_km', 'mean'),
+        dist_uni=('distance_to_university_km', 'mean'),
+    ).reset_index()
+    if persona == 'Student':
+        g['score'] = (_norm_inv(g['avg_rent']) * 0.40
+                      + _norm_inv(g['dist_uni']) * 0.40
+                      + _norm_inv(g['dist_city']) * 0.20)
+    elif persona == 'Professional':
+        g['score'] = (_norm_inv(g['dist_city']) * 0.50
+                      + _norm_inv(g['avg_rent']) * 0.30
+                      + _norm(g['yield_pct']) * 0.20)
+    elif persona == 'Investor':
+        g['score'] = (_norm(g['yield_pct']) * 0.60
+                      + _norm_inv(g['avg_price']) * 0.40)
+    else:
+        g['score'] = (_norm(g['yield_pct']) * 0.25
+                      + _norm_inv(g['avg_rent']) * 0.25
+                      + _norm_inv(g['dist_city']) * 0.25
+                      + _norm_inv(g['dist_uni']) * 0.25)
+    g['rank'] = g['score'].rank(ascending=False).astype(int)
+    return g.sort_values('rank').reset_index(drop=True)
+
+
+def compute_pulse(df: pd.DataFrame) -> Dict:
+    hmo = df[df['property_type'] == 'HMO'] if 'HMO' in df['property_type'].values else df
+    sg = hmo.groupby('postcode').agg(
+        r=('avg_rent', 'mean'), u=('distance_to_university_km', 'mean')
+    ).reset_index()
+    sg['s'] = _norm_inv(sg['r']) * 0.5 + _norm_inv(sg['u']) * 0.5
+    best_student = sg.loc[sg['s'].idxmax(), 'postcode']
+
+    yg = df.groupby('postcode')['yield_percent'].mean().reset_index()
+    byr = yg.loc[yg['yield_percent'].idxmax()]
+    best_yield = f"{byr['postcode']} ({byr['yield_percent']:.1f}%)"
+
+    rg = df.groupby('postcode')['avg_rent'].mean().reset_index()
+    bvr = rg.loc[rg['avg_rent'].idxmin()]
+    best_value = f"{bvr['postcode']} (£{bvr['avg_rent']:.0f}/mo)"
+
+    monthly = compute_monthly_trend(df).sort_values('date')
+    if len(monthly) >= 2:
+        v = monthly.tail(2)['avg_rent_mean'].values
+        rising = v[-1] > v[-2]
+        pct = abs((v[-1] - v[-2]) / v[-2] * 100) if v[-2] else 0
+        trend = ('Rising', f'+{pct:.1f}%') if rising else ('Stable', f'{pct:.1f}% change')
+    else:
+        trend = ('Stable', '')
+
+    return dict(student=best_student, yield_=best_yield,
+                value=best_value, trend=trend)
+
+
+def rec_reasons(pc: str, ranked: pd.DataFrame, full: pd.DataFrame, persona: str) -> List[str]:
+    row = ranked[ranked['postcode'] == pc].iloc[0]
+    mar = full['avg_rent'].mean()
+    may = full['yield_percent'].mean()
+    out = []
+    if row['avg_rent'] < mar * 0.96:
+        pct = (mar - row['avg_rent']) / mar * 100
+        out.append(f"Average rent £{row['avg_rent']:.0f}/mo — {pct:.0f}% below the market average")
+    if row['yield_pct'] > may * 1.02:
+        out.append(f"Above-average gross yield at {row['yield_pct']:.1f}% — strong return profile")
+    if persona in ('Student', 'Explorer') and row['dist_uni'] <= ranked['dist_uni'].quantile(0.4):
+        out.append(f"Good university access at {row['dist_uni']:.1f}km — ideal for student demand")
+    if persona in ('Professional', 'Explorer') and row['dist_city'] == ranked['dist_city'].min():
+        out.append(f"Closest to city centre at {row['dist_city']:.1f}km — high professional demand")
+    if persona == 'Investor' and row['avg_price'] < ranked['avg_price'].median():
+        out.append(f"Lower acquisition cost vs peers at £{row['avg_price']:,.0f} — stronger capital efficiency")
+    if not out:
+        out.append(f"Strongest composite score across rent, yield, and location for {persona} profile")
+        out.append(f"Yield {row['yield_pct']:.1f}% · Avg rent £{row['avg_rent']:.0f}/mo · City {row['dist_city']:.1f}km")
+    return out[:3]
+
+
+def insight(text: str) -> None:
+    st.markdown(
+        f'<div class="insight"><span class="insight-icon">◈</span>{text}</div>',
+        unsafe_allow_html=True,
     )
-    if title:
-        updates["title"] = dict(
-            text=title,
-            font=dict(color="#ffffff", size=13, family="Syne"),
-        )
-    if height:
-        updates["height"] = height
-    fig.update_layout(**updates)
+
+
+def dark_layout(fig: go.Figure, title: str = '', height: int = 370) -> go.Figure:
+    fig.update_layout(
+        title=dict(text=title, font=dict(size=13, color='#dde2ef'), x=0, xanchor='left'),
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(13,13,26,0.8)',
+        font=dict(family='Space Grotesk, sans-serif', color='#dde2ef', size=12),
+        height=height,
+        margin=dict(l=40, r=30, t=50, b=40),
+        legend=dict(bgcolor='rgba(0,0,0,0)', bordercolor='rgba(255,255,255,0.08)', font=dict(size=11)),
+    )
+    fig.update_xaxes(gridcolor='rgba(255,255,255,0.05)', linecolor='rgba(255,255,255,0.08)',
+                     tickfont=dict(size=11, color='#a0aec0'))
+    fig.update_yaxes(gridcolor='rgba(255,255,255,0.05)', linecolor='rgba(255,255,255,0.08)',
+                     tickfont=dict(size=11, color='#a0aec0'))
     return fig
 
-# ──────────────────────────────────────────────────────────────────────────────
-# LOAD DATA
-# ──────────────────────────────────────────────────────────────────────────────
-@st.cache_data
-def get_data():
-    df0 = load_data("data/sample_rental_data_small.csv")
-    df0["date"] = pd.to_datetime(df0["date"])
-    return df0
 
-df_full = get_data()
+# ── Sidebar ───────────────────────────────────────────────────────────────────
+data = load_dataset()
 
-# ──────────────────────────────────────────────────────────────────────────────
-# NAVBAR
-# ──────────────────────────────────────────────────────────────────────────────
-st.markdown(f"""
-<div class="navbar">
-    <div class="nav-brand">MAN HOMES</div>
-    <div class="nav-stats">
-        <div>
-            <div class="nav-stat-num">{df_full['postcode'].nunique()}</div>
-            <div class="nav-stat-label">Areas</div>
-        </div>
-        <div>
-            <div class="nav-stat-num">{len(df_full):,}</div>
-            <div class="nav-stat-label">Data points</div>
-        </div>
-        <div>
-            <div class="nav-stat-num">2021–2025</div>
-            <div class="nav-stat-label">Coverage</div>
-        </div>
-    </div>
-</div>
-""", unsafe_allow_html=True)
+with st.sidebar:
+    st.markdown('<div class="sidebar-logo">🏙 MANCHESTER HOMES</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sidebar-lbl">PERSONA</div>', unsafe_allow_html=True)
 
-# ──────────────────────────────────────────────────────────────────────────────
-# HERO
-# ──────────────────────────────────────────────────────────────────────────────
-st.markdown(f"""
-<div class="hero">
-    <div class="hero-eyebrow">Greater Manchester · Rental Intelligence</div>
-    <div class="hero-headline">FIND YOUR<br><span class="accent">PLACE.</span></div>
-    <div class="hero-sub">
-        Postcode-level rent patterns, affordability scores, yield comparisons,
-        trend forecasting, and an ML rent estimator — in one decision-support dashboard.
-    </div>
-</div>
-""", unsafe_allow_html=True)
+    persona = st.radio(
+        "persona",
+        options=['Student', 'Professional', 'Investor', 'Explorer'],
+        horizontal=True,
+        label_visibility='collapsed',
+        key='persona',
+    )
 
-# ──────────────────────────────────────────────────────────────────────────────
-# FILTERS
-# ──────────────────────────────────────────────────────────────────────────────
-st.markdown("<div class='filter-shell'>", unsafe_allow_html=True)
-st.markdown("<div class='filter-label'>Filter the market view</div>", unsafe_allow_html=True)
+    pc_hex = PERSONA_COLOUR[persona]
+    r, g_c, b = int(pc_hex[1:3], 16), int(pc_hex[3:5], 16), int(pc_hex[5:7], 16)
+    st.markdown(
+        f'<div class="persona-badge" style="background:rgba({r},{g_c},{b},0.12);'
+        f'border-color:{pc_hex};color:{pc_hex};">Active: {persona}</div>',
+        unsafe_allow_html=True,
+    )
 
-with st.expander("ADJUST FILTERS", expanded=False):
-    fc1, fc2, fc3, fc4 = st.columns(4)
+    st.divider()
+    st.markdown('<div class="sidebar-lbl">FILTERS</div>', unsafe_allow_html=True)
 
-    with fc1:
-        all_postcodes = sorted(df_full["postcode"].dropna().unique().tolist())
-        selected_postcodes = st.multiselect(
-            "Postcode area",
-            all_postcodes,
-            default=all_postcodes,
-            help="M1 = city centre · M13/M14 = student areas · M20/M21 = family suburbs"
-        )
+    all_postcodes = sorted(data['postcode'].unique())
+    all_types = sorted(data['property_type'].unique())
+    def_types = [t for t in PERSONA_TYPES[persona] if t in all_types]
 
-    with fc2:
-        all_types = sorted(df_full["property_type"].dropna().unique().tolist())
-        selected_types = st.multiselect(
-            "Property type",
-            all_types,
-            default=all_types,
-            help="Studio = cheapest · 1-bed = common entry-level stock · HMO = shared housing"
-        )
+    selected_postcodes = st.multiselect(
+        "Postcodes", options=all_postcodes, default=all_postcodes,
+    )
+    selected_types = st.multiselect(
+        "Property types", options=all_types,
+        default=def_types if def_types else all_types,
+        key=f'types_{persona}',
+    )
 
-    with fc3:
-        if "area_type" in df_full.columns:
-            all_area_types = sorted(df_full["area_type"].dropna().unique().tolist())
-            selected_area_types = st.multiselect(
-                "Who is it for?",
-                all_area_types,
-                default=all_area_types,
-            )
-        else:
-            selected_area_types = None
+    min_date = data['date'].min().to_timestamp()
+    max_date = data['date'].max().to_timestamp()
+    date_range = st.slider(
+        "Date range", min_value=min_date, max_value=max_date,
+        value=(min_date, max_date), format="%Y-%m",
+    )
 
-    with fc4:
-        min_date = df_full["date"].min().date()
-        max_date = df_full["date"].max().date()
-        date_range = st.date_input(
-            "Date range",
-            value=(min_date, max_date),
-            min_value=min_date,
-            max_value=max_date,
-        )
+    st.divider()
+    st.markdown(
+        '<div class="sidebar-footer">Manchester Rental Intelligence<br>Built by Sajan Mathew</div>',
+        unsafe_allow_html=True,
+    )
 
-if isinstance(date_range, (list, tuple)) and len(date_range) == 2:
-    start_date = pd.Timestamp(date_range[0])
-    end_date   = pd.Timestamp(date_range[1])
-else:
-    start_date = pd.Timestamp(min_date)
-    end_date   = pd.Timestamp(max_date)
 
-df = filter_data(df_full, selected_postcodes, selected_types, (start_date, end_date))
-if selected_area_types and "area_type" in df.columns:
-    df = df[df["area_type"].isin(selected_area_types)]
+# ── Filter ────────────────────────────────────────────────────────────────────
+mask = (
+    data['postcode'].isin(selected_postcodes)
+    & data['property_type'].isin(selected_types)
+    & (data['date'] >= pd.Period(date_range[0], freq='M'))
+    & (data['date'] <= pd.Period(date_range[1], freq='M'))
+)
+filtered = data[mask].copy()
 
-if df.empty:
-    st.warning("No data matches your filters — widen the selection and try again.")
+if filtered.empty:
+    st.warning("No data for current filters — adjust postcodes, types, or date range.")
     st.stop()
 
-summary_bits = [
-    f"{df['postcode'].nunique()} postcode areas",
-    f"{df['property_type'].nunique()} property types",
-    f"{len(df):,} filtered records",
-    f"{start_date.strftime('%b %Y')} → {end_date.strftime('%b %Y')}",
-]
-st.markdown(
-    "<div class='filter-summary'>" +
-    "".join([f"<div class='summary-pill'>{x}</div>" for x in summary_bits]) +
-    "</div>",
-    unsafe_allow_html=True,
-)
-st.markdown("</div>", unsafe_allow_html=True)
+model, metrics, preprocessor = get_model()
+pulse = compute_pulse(data)
+ranked = compute_rankings(filtered, persona)
 
-# ──────────────────────────────────────────────────────────────────────────────
-# KPI CARDS
-# ──────────────────────────────────────────────────────────────────────────────
-kpis = compute_kpis(df)
 
-k1, k2, k3, k4 = st.columns(4)
+# ── Hero ──────────────────────────────────────────────────────────────────────
+t = pulse['trend']
+trend_class = 'pulse-up' if t[0] == 'Rising' else 'pulse-flat'
 
-with k1:
-    st.markdown(f"""
-    <div style='background:#1f2021; border-top:2px solid #00ff88;
-         padding:24px 20px; border-radius:4px;
-         transition: background 0.3s;'>
-        <div style='display:flex; justify-content:space-between;
-             align-items:flex-start; margin-bottom:16px;'>
-            <span style='font-size:1.2rem;'>💷</span>
-            <span style='font-size:0.65rem; font-weight:700;
-                 color:#00ff88; background:rgba(0,255,136,0.1);
-                 padding:2px 8px; letter-spacing:0.08em;'>
-                 +LIVE
-            </span>
-        </div>
-        <div style='font-size:0.6rem; color:#849585;
-             text-transform:uppercase; letter-spacing:0.14em;
-             font-weight:700; margin-bottom:8px;'>
-             Avg Monthly Rent
-        </div>
-        <div style='font-family:Syne,sans-serif; font-size:2rem;
-             font-weight:800; color:#f1ffef; line-height:1;
-             margin-bottom:8px;'>
-             £{kpis['avg_rent']:,.0f}
-        </div>
-        <div style='font-size:0.65rem; color:#849585;
-             font-family:monospace; letter-spacing:0.08em;'>
-             PCM / GREATER MANCHESTER
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+st.markdown(f"""
+<div class="hero-wrap">
+  <div class="hero-eyebrow">GREATER MANCHESTER · LIVE RENTAL INTELLIGENCE</div>
+  <div class="hero-headline">FIND YOUR PLACE.</div>
+  <p class="hero-sub">Live rental intelligence across Greater Manchester.
+  Compare postcodes by affordability, yield, demand, and 6-month forecast trend.</p>
+</div>
+""", unsafe_allow_html=True)
 
-with k2:
-    st.markdown(f"""
-    <div style='background:#1f2021; border-top:2px solid #00ff88;
-         padding:24px 20px; border-radius:4px;
-         transition: background 0.3s;'>
-        <div style='display:flex; justify-content:space-between;
-             align-items:flex-start; margin-bottom:16px;'>
-            <span style='font-size:1.2rem;'>🏠</span>
-            <span style='font-size:0.65rem; font-weight:700;
-                 color:#00ff88; background:rgba(0,255,136,0.1);
-                 padding:2px 8px; letter-spacing:0.08em;'>
-                 INDEX
-            </span>
-        </div>
-        <div style='font-size:0.6rem; color:#849585;
-             text-transform:uppercase; letter-spacing:0.14em;
-             font-weight:700; margin-bottom:8px;'>
-             Avg Property Price
-        </div>
-        <div style='font-family:Syne,sans-serif; font-size:2rem;
-             font-weight:800; color:#f1ffef; line-height:1;
-             margin-bottom:8px;'>
-             £{kpis['avg_price']/1000:.0f}k
-        </div>
-        <div style='font-size:0.65rem; color:#849585;
-             font-family:monospace; letter-spacing:0.08em;'>
-             PURCHASE INDEX
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+st.markdown(f"""
+<div class="pulse-grid">
+  <div class="pulse-card">
+    <div class="pulse-label">BEST FOR STUDENTS</div>
+    <div class="pulse-value">{pulse['student']}</div>
+    <div class="pulse-sub">Top-ranked student zone</div>
+  </div>
+  <div class="pulse-card">
+    <div class="pulse-label">BEST YIELD</div>
+    <div class="pulse-value">{pulse['yield_']}</div>
+    <div class="pulse-sub">Highest gross yield</div>
+  </div>
+  <div class="pulse-card">
+    <div class="pulse-label">BEST VALUE</div>
+    <div class="pulse-value">{pulse['value']}</div>
+    <div class="pulse-sub">Lowest average rent</div>
+  </div>
+  <div class="pulse-card">
+    <div class="pulse-label">MARKET TREND</div>
+    <div class="pulse-value {trend_class}">{t[0]}</div>
+    <div class="pulse-sub">{t[1]}</div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
 
-with k3:
-    st.markdown(f"""
-    <div style='background:#1f2021; border-top:2px solid #00ff88;
-         padding:24px 20px; border-radius:4px;
-         transition: background 0.3s;'>
-        <div style='display:flex; justify-content:space-between;
-             align-items:flex-start; margin-bottom:16px;'>
-            <span style='font-size:1.2rem;'>📈</span>
-            <span style='font-size:0.65rem; font-weight:700;
-                 color:#00ff88; background:rgba(0,255,136,0.1);
-                 padding:2px 8px; letter-spacing:0.08em;'>
-                 HIGH
-            </span>
-        </div>
-        <div style='font-size:0.6rem; color:#849585;
-             text-transform:uppercase; letter-spacing:0.14em;
-             font-weight:700; margin-bottom:8px;'>
-             Avg Gross Yield
-        </div>
-        <div style='font-family:Syne,sans-serif; font-size:2rem;
-             font-weight:800; color:#00ff88; line-height:1;
-             margin-bottom:8px;'>
-             {kpis['avg_yield']:.1f}%
-        </div>
-        <div style='font-size:0.65rem; color:#849585;
-             font-family:monospace; letter-spacing:0.08em;'>
-             NET RENTAL RETURN
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
 
-with k4:
-    st.markdown(f"""
-    <div style='background:#1f2021; border-top:2px solid #00ff88;
-         padding:24px 20px; border-radius:4px;
-         transition: background 0.3s;'>
-        <div style='display:flex; justify-content:space-between;
-             align-items:flex-start; margin-bottom:16px;'>
-            <span style='font-size:1.2rem;'>⭐</span>
-            <span style='font-size:0.65rem; font-weight:700;
-                 color:#00ff88; background:rgba(0,255,136,0.1);
-                 padding:2px 8px; letter-spacing:0.08em;'>
-                 HOT
-            </span>
-        </div>
-        <div style='font-size:0.6rem; color:#849585;
-             text-transform:uppercase; letter-spacing:0.14em;
-             font-weight:700; margin-bottom:8px;'>
-             Top Yield Area
-        </div>
-        <div style='font-family:Syne,sans-serif; font-size:2rem;
-             font-weight:800; color:#00ff88; line-height:1;
-             margin-bottom:8px;'>
-             {kpis['top_yield_postcode']}
-        </div>
-        <div style='font-size:0.65rem; color:#849585;
-             font-family:monospace; letter-spacing:0.08em;'>
-             BEST RETURN DISTRICT
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+# ── KPIs ──────────────────────────────────────────────────────────────────────
+avg_rent_f = filtered['avg_rent'].mean()
+avg_yield_f = filtered['yield_percent'].mean()
+avg_rent_all = data['avg_rent'].mean()
+avg_yield_all = data['yield_percent'].mean()
+top_yield_pc = filtered.groupby('postcode')['yield_percent'].mean().idxmax()
+top_yield_val = filtered.groupby('postcode')['yield_percent'].mean().max()
+n_pc = filtered['postcode'].nunique()
 
-# insights row
-ins1, ins2, ins3 = st.columns(3)
-rent_by_area      = compute_rent_by_postcode(df).sort_values("avg_rent")
-cheapest_area     = rent_by_area.iloc[0]["postcode"]
-most_expensive_area = rent_by_area.iloc[-1]["postcode"]
+c1, c2, c3, c4 = st.columns(4)
+c1.metric("Avg Monthly Rent", f"£{avg_rent_f:,.0f}",
+          delta=f"{'↑' if avg_rent_f >= avg_rent_all else '↓'} vs £{avg_rent_all:,.0f} market")
+c2.metric("Avg Gross Yield", f"{avg_yield_f:.1f}%",
+          delta=f"{'↑' if avg_yield_f >= avg_yield_all else '↓'} vs {avg_yield_all:.1f}% market")
+c3.metric("Top Yield Postcode", top_yield_pc, delta=f"{top_yield_val:.1f}% gross")
+c4.metric("Postcodes in View", str(n_pc), delta=f"{len(filtered):,} data points")
 
-with ins1:
-    st.markdown(f"""
-    <div class='insight-card'>
-        <div class='insight-title'>Market snapshot</div>
-        <div class='insight-big'>{cheapest_area} to {most_expensive_area}</div>
-        <div class='insight-copy'>
-            The rent spread across selected areas shows clear neighbourhood
-            segmentation rather than one uniform market.
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
 
-with ins2:
-    st.markdown(f"""
-    <div class='insight-card'>
-        <div class='insight-title'>Portfolio story</div>
-        <div class='insight-big'>Decision-support, not just charts</div>
-        <div class='insight-copy'>
-            This dashboard combines exploration, comparison, ranking, trend analysis,
-            and a simple ML estimate in one product-style interface.
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with ins3:
-    st.markdown(f"""
-    <div class='insight-card'>
-        <div class='insight-title'>Data note</div>
-        <div class='insight-big'>Synthetic but realistic</div>
-        <div class='insight-copy'>
-            A controlled portfolio dataset — useful for demonstrating analytical
-            thinking, UI design, and stakeholder-facing communication.
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-st.markdown("<div style='margin-top:12px;'></div>", unsafe_allow_html=True)
-
-csv = df.to_csv(index=False).encode("utf-8")
-st.download_button(
-    "⬇ Export filtered data as CSV",
-    data=csv,
-    file_name="manchester_rentals_filtered.csv",
-    mime="text/csv",
-)
-
-st.divider()
-
-# ──────────────────────────────────────────────────────────────────────────────
-# TABS
-# ──────────────────────────────────────────────────────────────────────────────
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "LIVE MAP",
-    "RENT & YIELD",
-    "RANKINGS",
-    "TRENDS",
-    "PREDICTOR",
+# ── Tabs ──────────────────────────────────────────────────────────────────────
+tab_ov, tab_rank, tab_map, tab_pred, tab_trend = st.tabs([
+    "Overview", "Rankings", "Live Map", "Predictor", "Trends",
 ])
 
-# ──────────────────────────────────────────────────────────────────────────────
-# TAB 1: MAP
-# ──────────────────────────────────────────────────────────────────────────────
-with tab1:
-    st.markdown("""
-    <p class='sec'>Interactive affordability map</p>
-    <p class='sec-desc'>
-        Explore postcode-level affordability spatially. Bubble size reflects the affordability score,
-        while colour moves from premium / low-value areas toward stronger value zones.
-    </p>
-    """, unsafe_allow_html=True)
 
-    st.markdown("""
-    <div class='legend'>
-        <div class='legend-item'><div class='dot' style='background:#00ff88;'></div>High affordability (70+)</div>
-        <div class='legend-item'><div class='dot' style='background:#e8c547;'></div>Medium (40–70)</div>
-        <div class='legend-item'><div class='dot' style='background:#c0392b;'></div>Low affordability (&lt;40)</div>
+# ════════════════════════════════ OVERVIEW ════════════════════════════════════
+with tab_ov:
+    st.markdown('<div class="section-wrap">', unsafe_allow_html=True)
+    st.subheader("Average Rent by Postcode")
+
+    avg_rent_df = compute_average_rent_by_postcode(filtered)
+    top_pc = avg_rent_df.iloc[0]['postcode']
+    bot_pc = avg_rent_df.iloc[-1]['postcode']
+    gap = avg_rent_df.iloc[0]['avg_rent_mean'] - avg_rent_df.iloc[-1]['avg_rent_mean']
+    insight(
+        f"{top_pc} commands the highest average rent at "
+        f"£{avg_rent_df.iloc[0]['avg_rent_mean']:,.0f}/mo, "
+        f"while {bot_pc} offers the best affordability at "
+        f"£{avg_rent_df.iloc[-1]['avg_rent_mean']:,.0f}/mo — a £{gap:,.0f}/mo gap."
+    )
+
+    fig_rent = px.bar(
+        avg_rent_df, x='postcode', y='avg_rent_mean',
+        color='avg_rent_mean',
+        color_continuous_scale=[(0, '#2a2a5a'), (0.5, '#4f9cf9'), (1, '#00ff88')],
+        labels={'avg_rent_mean': 'Avg Rent (£)', 'postcode': 'Postcode'},
+        custom_data=['postcode', 'avg_rent_mean'],
+    )
+    fig_rent.update_traces(
+        hovertemplate='<b>%{customdata[0]}</b><br>Avg Rent: £%{customdata[1]:,.0f}/mo<extra></extra>',
+        marker_line_width=0,
+    )
+    fig_rent.update_coloraxes(showscale=False)
+    dark_layout(fig_rent)
+    st.plotly_chart(fig_rent, use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown('<div class="section-wrap">', unsafe_allow_html=True)
+    st.subheader("Gross Yield by Postcode")
+
+    avg_yield_df = compute_average_yield_by_postcode(filtered)
+    hy_pc = avg_yield_df.iloc[0]['postcode']
+    hy_val = avg_yield_df.iloc[0]['yield_percent_mean']
+    ly_pc = avg_yield_df.iloc[-1]['postcode']
+    insight(
+        f"{hy_pc} leads return potential at {hy_val:.1f}% gross yield — "
+        f"investors targeting capital efficiency should prioritise this zone over {ly_pc}."
+    )
+
+    fig_yield = px.bar(
+        avg_yield_df, x='postcode', y='yield_percent_mean',
+        color='yield_percent_mean',
+        color_continuous_scale=[(0, '#1a1a3e'), (0.5, '#a855f7'), (1, '#00ff88')],
+        labels={'yield_percent_mean': 'Avg Yield (%)', 'postcode': 'Postcode'},
+        custom_data=['postcode', 'yield_percent_mean'],
+    )
+    fig_yield.update_traces(
+        hovertemplate='<b>%{customdata[0]}</b><br>Yield: %{customdata[1]:.2f}%<extra></extra>',
+        marker_line_width=0,
+    )
+    fig_yield.update_coloraxes(showscale=False)
+    dark_layout(fig_yield)
+    st.plotly_chart(fig_yield, use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    col_a, col_b = st.columns(2)
+    with col_a:
+        st.markdown('<div class="section-wrap">', unsafe_allow_html=True)
+        st.subheader("Rent Distribution")
+        insight("Spread shows how rent varies within each postcode across property types.")
+        fig_box = px.box(
+            filtered, x='postcode', y='avg_rent',
+            color='postcode',
+            color_discrete_sequence=['#4f9cf9', '#00ff88', '#a855f7', '#f97316', '#f43f5e'],
+            labels={'avg_rent': 'Avg Rent (£)', 'postcode': 'Postcode'},
+        )
+        fig_box.update_traces(
+            hovertemplate='<b>%{x}</b><br>Rent: £%{y:,.0f}/mo<extra></extra>',
+        )
+        dark_layout(fig_box)
+        st.plotly_chart(fig_box, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    with col_b:
+        st.markdown('<div class="section-wrap">', unsafe_allow_html=True)
+        st.subheader("Yield vs Avg Price")
+        insight("Higher-yielding postcodes are often lower-price entry points — ideal for investors.")
+        agg = filtered.groupby('postcode').agg(
+            avg_price=('avg_price', 'mean'),
+            yield_pct=('yield_percent', 'mean'),
+            avg_rent=('avg_rent', 'mean'),
+        ).reset_index()
+        fig_scatter = px.scatter(
+            agg, x='avg_price', y='yield_pct', text='postcode',
+            size='avg_rent', size_max=28,
+            color='yield_pct',
+            color_continuous_scale=[(0, '#2a2a5a'), (1, '#00ff88')],
+            labels={'avg_price': 'Avg Price (£)', 'yield_pct': 'Yield (%)'},
+            custom_data=['postcode', 'avg_price', 'yield_pct', 'avg_rent'],
+        )
+        fig_scatter.update_traces(
+            textposition='top center',
+            textfont=dict(size=11, color='#dde2ef'),
+            hovertemplate='<b>%{customdata[0]}</b><br>Price: £%{customdata[1]:,.0f}'
+                          '<br>Yield: %{customdata[2]:.1f}%<br>Rent: £%{customdata[3]:,.0f}/mo<extra></extra>',
+        )
+        fig_scatter.update_coloraxes(showscale=False)
+        dark_layout(fig_scatter)
+        st.plotly_chart(fig_scatter, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+
+# ════════════════════════════════ RANKINGS ════════════════════════════════════
+with tab_rank:
+    pc_colour = PERSONA_COLOUR[persona]
+    st.markdown(
+        f'<div class="rec-badge">Viewing as: {persona}</div>',
+        unsafe_allow_html=True,
+    )
+
+    top_row = ranked.iloc[0]
+    top_pc_name = top_row['postcode']
+    reasons = rec_reasons(top_pc_name, ranked, data, persona)
+
+    reasons_html = ''.join(
+        f'<div class="rec-reason"><span class="rec-bullet">▸</span>{r}</div>'
+        for r in reasons
+    )
+    st.markdown(f"""
+    <div class="rec-card">
+      <div class="rec-postcode">{top_pc_name} 🏆</div>
+      <div class="rec-title">RECOMMENDED FOR {persona.upper()}</div>
+      {reasons_html}
     </div>
     """, unsafe_allow_html=True)
 
-    afford_df = compute_affordability_score(df)
-
-    coords = {
-        "M1":  (53.4808, -2.2426), "M2":  (53.4831, -2.2441),
-        "M3":  (53.4851, -2.2534), "M4":  (53.4878, -2.2309),
-        "M5":  (53.4740, -2.2785), "M6":  (53.4762, -2.2934),
-        "M8":  (53.5042, -2.2312), "M11": (53.4749, -2.1712),
-        "M12": (53.4598, -2.2051), "M13": (53.4613, -2.2181),
-        "M14": (53.4479, -2.2202), "M15": (53.4659, -2.2496),
-        "M16": (53.4516, -2.2708), "M20": (53.4121, -2.2290),
-        "M21": (53.4359, -2.2681),
-    }
-
-    afford_df["lat"]       = afford_df["postcode"].map(lambda x: coords.get(x, (53.48, -2.24))[0])
-    afford_df["lon"]       = afford_df["postcode"].map(lambda x: coords.get(x, (53.48, -2.24))[1])
-    afford_df["bubble"]    = afford_df["affordability_score"].clip(lower=8) * 2.2
-    afford_df["rent_fmt"]  = afford_df["avg_rent"].map(lambda x: f"£{x:,.0f}/mo")
-    afford_df["score_fmt"] = afford_df["affordability_score"].map(lambda x: f"{x:.0f}/100")
-
-    m1, m2 = st.columns([3, 1])
-
-    with m1:
-        fig_map = px.scatter_map(
-            afford_df,
-            lat="lat",
-            lon="lon",
-            size="bubble",
-            color="affordability_score",
-            color_continuous_scale=[
-                [0.0, "#c0392b"],
-                [0.35, "#c0392b"],
-                [0.55, "#e8c547"],
-                [0.75, "#00ff88"],
-                [1.0,  "#00ff88"],
-            ],
-            hover_name="postcode",
-            hover_data={
-                "score_fmt": True,
-                "rent_fmt": True,
-                "avg_distance_to_city": ":.1f",
-                "lat": False,
-                "lon": False,
-                "bubble": False,
-                "affordability_score": False,
-            },
-            labels={
-                "score_fmt": "Affordability",
-                "rent_fmt": "Average rent",
-                "avg_distance_to_city": "Distance to city (km)",
-            },
-            zoom=11,
-            center={"lat": 53.475, "lon": -2.240},
-            map_style="carto-darkmatter",
-            height=600,
-        )
-
-        fig_map.update_layout(
-            paper_bgcolor="#0d0d18",
-            font=dict(color="#5a5870", family="Space Grotesk"),
-            hoverlabel=dict(
-                bgcolor="#12121f",
-                bordercolor="#00ff88",
-                font_color="#ffffff",
-                font_family="Space Grotesk",
-            ),
-            coloraxis_colorbar=dict(
-                title=dict(text="Score", font=dict(color="#5a5870")),
-                tickfont=dict(color="#5a5870"),
-                bgcolor="#0d0d18",
-                bordercolor="rgba(255,255,255,0.06)",
-            ),
-            margin=dict(l=0, r=0, t=0, b=0),
-        )
-        st.plotly_chart(fig_map, use_container_width=True)
-
-    with m2:
-        st.markdown(
-            "<p style='font-size:0.65rem; color:#3a3850;"
-            " text-transform:uppercase; letter-spacing:0.1em;"
-            " font-weight:700; margin-bottom:12px;'>"
-            "AREA RANKING</p>",
-            unsafe_allow_html=True
-        )
-
-        ranking_df = afford_df.sort_values(
-            "affordability_score", ascending=False
-        ).reset_index(drop=True)
-
-        cards_html = "<div style='height:580px; overflow-y:auto; overflow-x:hidden; padding-right:6px;'>"
-
-        for _, row in ranking_df.iterrows():
-            score = float(row["affordability_score"])
-            color = "#00ff88" if score >= 70 else "#e8c547" if score >= 40 else "#c0392b"
-            bar_w = max(4, int(score))
-            cards_html += f"""
-            <div style='margin-bottom:6px; padding:8px 10px;
-                border:1px solid rgba(255,255,255,0.06);
-                background:rgba(255,255,255,0.015);
-                border-radius:8px;'>
-                <div style='display:flex; justify-content:space-between;
-                     align-items:center; margin-bottom:5px;'>
-                    <span style='font-size:0.8rem; color:#ffffff;
-                         font-weight:700;'>{row['postcode']}</span>
-                    <span style='font-size:0.72rem; color:{color};
-                         font-weight:700;'>{score:.0f}/100</span>
-                </div>
-                <div style='background:rgba(255,255,255,0.04);
-                     border-radius:999px; height:2px; overflow:hidden;'>
-                    <div style='width:{bar_w}%; height:100%;
-                         background:{color};'></div>
-                </div>
-                <div style='font-size:0.68rem; color:#5a5870; margin-top:4px;'>
-                    Avg rent: £{row['avg_rent']:,.0f}/mo
-                </div>
-            </div>"""
-
-        cards_html += "</div>"
-        st.markdown(cards_html, unsafe_allow_html=True)
-
-# ──────────────────────────────────────────────────────────────────────────────
-# TAB 2: RENT & YIELD
-# ──────────────────────────────────────────────────────────────────────────────
-with tab2:
-    st.markdown("""
-    <p class='sec'>Rent and yield comparison</p>
-    <p class='sec-desc'>
-        Compare what tenants pay and what investors might earn. This section is useful for showing
-        both occupant affordability and investment attractiveness side by side.
-    </p>
-    """, unsafe_allow_html=True)
-
-    rent_df  = compute_rent_by_postcode(df).sort_values("avg_rent", ascending=True)
-    yield_df = compute_yield_by_postcode(df).sort_values("yield_percent", ascending=True)
-
-    cr, cy = st.columns(2)
-
-    with cr:
-        st.markdown("""
-        <div class='info-box'>
-            <strong>Monthly rent</strong> reflects the average monthly cost paid by tenants in each postcode.
-        </div>
-        """, unsafe_allow_html=True)
-
-        fig_r = px.bar(
-            rent_df,
-            x="postcode",
-            y="avg_rent",
-            color="avg_rent",
-            color_continuous_scale=[[0, "#182033"], [0.55, "#2f5fa7"], [1, "#00ff88"]],
-            text=rent_df["avg_rent"].map(lambda x: f"£{x:,.0f}"),
-        )
-        fig_r.update_traces(textposition="outside", textfont=dict(color="#ffffff", size=10))
-        fig_r = chart(fig_r, "Average monthly rent by postcode", 390)
-        fig_r.update_layout(coloraxis_showscale=False, yaxis_title="£ per month", xaxis_title="")
-        st.plotly_chart(fig_r, use_container_width=True)
-
-    with cy:
-        st.markdown("""
-        <div class='info-box'>
-            <strong>Gross yield</strong> estimates annual rent as a percentage of property value.
-        </div>
-        """, unsafe_allow_html=True)
-
-        fig_y = px.bar(
-            yield_df,
-            x="postcode",
-            y="yield_percent",
-            color="yield_percent",
-            color_continuous_scale=[[0, "#24161a"], [0.55, "#8b5a20"], [1, "#00ff88"]],
-            text=yield_df["yield_percent"].map(lambda x: f"{x:.1f}%"),
-        )
-        fig_y.update_traces(textposition="outside", textfont=dict(color="#ffffff", size=10))
-        fig_y = chart(fig_y, "Gross yield by postcode", 390)
-        fig_y.update_layout(coloraxis_showscale=False, yaxis_title="Yield %", xaxis_title="")
-        st.plotly_chart(fig_y, use_container_width=True)
-
-    st.markdown("""
-    <p class='sec' style='margin-top:8px;'>Price versus rent positioning</p>
-    <p class='sec-desc'>
-        Each point represents a property observation. Larger markers indicate larger homes.
-        This helps reveal whether higher prices are translating cleanly into higher rents.
-    </p>
-    """, unsafe_allow_html=True)
-
-    fig_sc = px.scatter(
-        df,
-        x="avg_price",
-        y="avg_rent",
-        color="property_type",
-        size="property_size_sqft",
-        hover_data={"postcode": True, "avg_price": ":,.0f", "avg_rent": ":,.0f"},
-        color_discrete_sequence=["#00ff88", "#63a6ff", "#e8c547", "#c0392b"],
+    st.subheader(f"Full Rankings — {persona}")
+    insight(
+        f"Rankings weighted for {persona} priorities. "
+        f"{top_pc_name} scores highest; adjust persona in the sidebar to re-rank."
     )
-    fig_sc = chart(fig_sc, "Property price against monthly rent", 430)
-    fig_sc.update_layout(
-        xaxis_title="Property price (£)",
-        yaxis_title="Monthly rent (£)",
-        legend_title="Property type",
-    )
-    st.plotly_chart(fig_sc, use_container_width=True)
 
-# ──────────────────────────────────────────────────────────────────────────────
-# TAB 3: RANKINGS
-# ──────────────────────────────────────────────────────────────────────────────
-with tab3:
-    st.markdown("""
-    <p class='sec'>Area rankings by user profile</p>
-    <p class='sec-desc'>
-        Not every postcode is "best" for the same person. These rankings show how the same market can
-        be reframed depending on whether the audience is student-led or professional-led.
-    </p>
-    """, unsafe_allow_html=True)
-
-    best_df = compute_best_areas(df)
-
-    cs, cp = st.columns(2)
-
-    with cs:
-        st.markdown("""
-        <div style='background:rgba(0,255,136,0.04); border:1px solid rgba(0,255,136,0.12);
-                    border-top:2px solid #00ff88; border-radius:10px; padding:14px; margin-bottom:14px;'>
-            <div style='font-family:Syne,sans-serif; font-size:0.95rem; font-weight:800; color:#00ff88;'>🎓 Best for students</div>
-            <div style='font-size:0.8rem; color:#5a5870; margin-top:4px; line-height:1.6;'>
-                Weighted on lower rent and shorter distance to university.
+    for _, row in ranked.iterrows():
+        rk = int(row['rank'])
+        row_class = 'rank-row-1' if rk == 1 else ''
+        num_class = 'rank-num-1' if rk == 1 else ''
+        trophy = ' 🏆' if rk == 1 else ''
+        st.markdown(f"""
+        <div class="rank-row {row_class}">
+          <div class="rank-num {num_class}">{rk}</div>
+          <div class="rank-pc">{row['postcode']}{trophy}</div>
+          <div class="rank-stats">
+            <div class="rank-stat">
+              <div class="rank-stat-lbl">Avg Rent</div>
+              <div class="rank-stat-val">£{row['avg_rent']:,.0f}/mo</div>
             </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        st_tbl = (
-            best_df[["postcode", "avg_rent", "dist_to_uni", "student_score"]]
-            .sort_values("student_score", ascending=False)
-            .reset_index(drop=True)
-        )
-        st_tbl.index += 1
-        st_tbl["avg_rent"]     = st_tbl["avg_rent"].map(lambda x: f"£{x:,.0f}/mo")
-        st_tbl["dist_to_uni"]  = st_tbl["dist_to_uni"].map(lambda x: f"{x:.1f} km")
-        st_tbl["student_score"] = st_tbl["student_score"].map(lambda x: f"{x:.0f}/100")
-        st_tbl = st_tbl.rename(columns={
-            "postcode": "Area",
-            "avg_rent": "Monthly rent",
-            "dist_to_uni": "To university",
-            "student_score": "Score",
-        })
-
-        student_html = "<div style='background:#1f2021;" \
-            "border-radius:6px;overflow:hidden;" \
-            "border:1px solid rgba(255,255,255,0.06);'>" \
-            "<table style='width:100%;border-collapse:collapse;" \
-            "font-family:Space Grotesk,sans-serif;'>" \
-            "<thead><tr style='border-bottom:1px solid " \
-            "rgba(0,255,136,0.15);'>" \
-            "<th style='padding:12px 16px;color:#00ff88;" \
-            "font-size:0.6rem;font-weight:700;" \
-            "text-transform:uppercase;letter-spacing:0.14em;" \
-            "text-align:left;'>Area</th>" \
-            "<th style='padding:12px 16px;color:#00ff88;" \
-            "font-size:0.6rem;font-weight:700;" \
-            "text-transform:uppercase;letter-spacing:0.14em;" \
-            "text-align:left;'>Monthly Rent</th>" \
-            "<th style='padding:12px 16px;color:#00ff88;" \
-            "font-size:0.6rem;font-weight:700;" \
-            "text-transform:uppercase;letter-spacing:0.14em;" \
-            "text-align:left;'>To Uni</th>" \
-            "<th style='padding:12px 16px;color:#00ff88;" \
-            "font-size:0.6rem;font-weight:700;" \
-            "text-transform:uppercase;letter-spacing:0.14em;" \
-            "text-align:right;'>Score</th>" \
-            "</tr></thead><tbody>"
-
-        for i, (_, row) in enumerate(st_tbl.iterrows(), 1):
-            bg = "rgba(255,255,255,0.015)" if i % 2 == 0 else "transparent"
-            student_html += (
-                "<tr style='background:" + bg + ";"
-                "border-bottom:1px solid rgba(255,255,255,0.04);'>"
-                "<td style='padding:13px 16px;color:#f1ffef;"
-                "font-weight:700;font-size:0.88rem;'>"
-                + str(row['Area']) +
-                "</td>"
-                "<td style='padding:13px 16px;color:#b9cbb9;"
-                "font-size:0.84rem;font-family:monospace;'>"
-                + str(row['Monthly rent']) +
-                "</td>"
-                "<td style='padding:13px 16px;color:#b9cbb9;"
-                "font-size:0.84rem;'>"
-                + str(row['To university']) +
-                "</td>"
-                "<td style='padding:13px 16px;color:#00ff88;"
-                "font-weight:800;font-size:0.84rem;"
-                "font-family:monospace;text-align:right;'>"
-                + str(row['Score']) +
-                "</td></tr>"
-            )
-
-        student_html += "</tbody></table></div>"
-        st.markdown(student_html, unsafe_allow_html=True)
-
-        selected_pc = st.selectbox(
-            "Explore a postcode in detail",
-            options=["Select..."] + sorted(df["postcode"].unique().tolist()),
-            key="pc_detail"
-        )
-
-        if selected_pc != "Select...":
-            pc = df[df["postcode"] == selected_pc]
-
-            r = pc["avg_rent"].mean()
-            p = pc["avg_price"].mean()
-            y = pc["yield_percent"].mean()
-            s = pc["property_size_sqft"].mean()
-            dc = pc["distance_to_city_center_km"].mean()
-            du = pc["distance_to_university_km"].mean()
-
-            breakdown = ""
-            for pt in sorted(pc["property_type"].unique()):
-                subset = pc[pc["property_type"] == pt]
-                if not subset.empty:
-                    rent_val = subset["avg_rent"].mean()
-                    pct = min(100, int(rent_val / pc["avg_rent"].max() * 100))
-                    breakdown += (
-                        "<div style='margin-bottom:10px;'>"
-                        "<div style='display:flex;justify-content:space-between;margin-bottom:4px;'>"
-                        "<span style='font-size:0.72rem;color:#849585;"
-                        "text-transform:uppercase;letter-spacing:0.08em;'>"
-                        + pt +
-                        "</span>"
-                        "<span style='font-size:0.72rem;color:#00ff88;"
-                        "font-weight:700;font-family:monospace;'>"
-                        + f"£{rent_val:,.0f}" +
-                        "</span></div>"
-                        "<div style='background:rgba(255,255,255,0.06);"
-                        "height:3px;border-radius:2px;'>"
-                        "<div style='width:" + str(pct) + "%;height:100%;"
-                        "background:#00ff88;border-radius:2px;'></div>"
-                        "</div></div>"
-                    )
-
-            types_str = ", ".join(sorted(pc["property_type"].unique()))
-
-            html = (
-                "<div style='background:#1f2021;border:1px solid "
-                "rgba(0,255,136,0.15);border-radius:8px;padding:28px;"
-                "margin-top:16px;'>"
-
-                "<div style='margin-bottom:24px;'>"
-                "<div style='font-size:0.6rem;color:#00ff88;"
-                "letter-spacing:0.2em;font-weight:700;"
-                "text-transform:uppercase;margin-bottom:8px;'>"
-                "HIGH DEMAND · POSTCODE: " + selected_pc +
-                "</div>"
-                "<div style='font-family:Syne,sans-serif;"
-                "font-size:3rem;font-weight:800;color:#f1ffef;"
-                "line-height:0.9;letter-spacing:-0.02em;'>"
-                + selected_pc +
-                "</div>"
-                "<div style='font-size:0.85rem;color:#849585;"
-                "margin-top:6px;letter-spacing:0.1em;'>"
-                "GREATER MANCHESTER"
-                "</div></div>"
-
-                "<div style='display:grid;grid-template-columns:"
-                "repeat(4,1fr);gap:1px;background:rgba(255,255,255,0.06);"
-                "border-radius:4px;overflow:hidden;margin-bottom:24px;'>"
-
-                "<div style='background:#1b1c1d;padding:16px 14px;'>"
-                "<div style='font-size:0.55rem;color:#849585;"
-                "text-transform:uppercase;letter-spacing:0.14em;"
-                "margin-bottom:6px;'>Avg Rent</div>"
-                "<div style='font-family:Syne,sans-serif;font-size:1.4rem;"
-                "font-weight:800;color:#f1ffef;line-height:1;'>"
-                + f"£{r:,.0f}" +
-                "</div><div style='font-size:0.6rem;color:#00ff88;"
-                "margin-top:4px;font-family:monospace;'>PCM</div></div>"
-
-                "<div style='background:#1b1c1d;padding:16px 14px;'>"
-                "<div style='font-size:0.55rem;color:#849585;"
-                "text-transform:uppercase;letter-spacing:0.14em;"
-                "margin-bottom:6px;'>Yield</div>"
-                "<div style='font-family:Syne,sans-serif;font-size:1.4rem;"
-                "font-weight:800;color:#00ff88;line-height:1;'>"
-                + f"{y:.1f}%" +
-                "</div><div style='font-size:0.6rem;color:#849585;"
-                "margin-top:4px;font-family:monospace;'>GROSS</div></div>"
-
-                "<div style='background:#1b1c1d;padding:16px 14px;'>"
-                "<div style='font-size:0.55rem;color:#849585;"
-                "text-transform:uppercase;letter-spacing:0.14em;"
-                "margin-bottom:6px;'>Avg Size</div>"
-                "<div style='font-family:Syne,sans-serif;font-size:1.4rem;"
-                "font-weight:800;color:#f1ffef;line-height:1;'>"
-                + f"{s:.0f}" +
-                "</div><div style='font-size:0.6rem;color:#849585;"
-                "margin-top:4px;font-family:monospace;'>SQ FT</div></div>"
-
-                "<div style='background:#1b1c1d;padding:16px 14px;'>"
-                "<div style='font-size:0.55rem;color:#849585;"
-                "text-transform:uppercase;letter-spacing:0.14em;"
-                "margin-bottom:6px;'>Avg Price</div>"
-                "<div style='font-family:Syne,sans-serif;font-size:1.4rem;"
-                "font-weight:800;color:#f1ffef;line-height:1;'>"
-                + f"£{p/1000:.0f}k" +
-                "</div><div style='font-size:0.6rem;color:#849585;"
-                "margin-top:4px;font-family:monospace;'>PURCHASE</div></div>"
-
-                "</div>"
-
-                "<div style='display:grid;grid-template-columns:1fr 1fr;"
-                "gap:16px;'>"
-
-                "<div style='background:#121315;border-radius:4px;"
-                "padding:16px;'>"
-                "<div style='font-size:0.6rem;color:#849585;"
-                "text-transform:uppercase;letter-spacing:0.14em;"
-                "margin-bottom:12px;font-weight:700;'>"
-                "Rental Breakdown</div>"
-                + breakdown +
-                "</div>"
-
-                "<div style='background:#121315;border-radius:4px;"
-                "padding:16px;'>"
-                "<div style='font-size:0.6rem;color:#849585;"
-                "text-transform:uppercase;letter-spacing:0.14em;"
-                "margin-bottom:12px;font-weight:700;'>"
-                "Location Intel</div>"
-
-                "<div style='display:flex;justify-content:space-between;"
-                "padding:8px 0;border-bottom:1px solid "
-                "rgba(255,255,255,0.04);'>"
-                "<span style='font-size:0.75rem;color:#849585;'>"
-                "Dist. to City</span>"
-                "<span style='font-size:0.75rem;color:#f1ffef;"
-                "font-weight:700;font-family:monospace;'>"
-                + f"{dc:.1f} km" +
-                "</span></div>"
-
-                "<div style='display:flex;justify-content:space-between;"
-                "padding:8px 0;border-bottom:1px solid "
-                "rgba(255,255,255,0.04);'>"
-                "<span style='font-size:0.75rem;color:#849585;'>"
-                "Dist. to Uni</span>"
-                "<span style='font-size:0.75rem;color:#f1ffef;"
-                "font-weight:700;font-family:monospace;'>"
-                + f"{du:.1f} km" +
-                "</span></div>"
-
-                "<div style='display:flex;justify-content:space-between;"
-                "padding:8px 0;border-bottom:1px solid "
-                "rgba(255,255,255,0.04);'>"
-                "<span style='font-size:0.75rem;color:#849585;'>"
-                "Avg Yield</span>"
-                "<span style='font-size:0.75rem;color:#00ff88;"
-                "font-weight:700;font-family:monospace;'>"
-                + f"{y:.2f}%" +
-                "</span></div>"
-
-                "<div style='display:flex;justify-content:space-between;"
-                "padding:8px 0;'>"
-                "<span style='font-size:0.75rem;color:#849585;'>"
-                "Property Types</span>"
-                "<span style='font-size:0.75rem;color:#f1ffef;"
-                "font-weight:700;font-family:monospace;'>"
-                + types_str +
-                "</span></div>"
-
-                "</div></div></div>"
-            )
-
-            st.markdown(html, unsafe_allow_html=True)
-
-    with cp:
-        st.markdown("""
-        <div style='background:rgba(99,166,255,0.04); border:1px solid rgba(99,166,255,0.12);
-                    border-top:2px solid #63a6ff; border-radius:10px; padding:14px; margin-bottom:14px;'>
-            <div style='font-family:Syne,sans-serif; font-size:0.95rem; font-weight:800; color:#63a6ff;'>💼 Best for professionals</div>
-            <div style='font-size:0.8rem; color:#5a5870; margin-top:4px; line-height:1.6;'>
-                Weighted on city-centre access and stronger rental yield potential.
+            <div class="rank-stat">
+              <div class="rank-stat-lbl">Yield</div>
+              <div class="rank-stat-val">{row['yield_pct']:.1f}%</div>
             </div>
+            <div class="rank-stat">
+              <div class="rank-stat-lbl">City</div>
+              <div class="rank-stat-val">{row['dist_city']:.1f}km</div>
+            </div>
+            <div class="rank-stat">
+              <div class="rank-stat-lbl">Uni</div>
+              <div class="rank-stat-val">{row['dist_uni']:.1f}km</div>
+            </div>
+          </div>
+          <div class="rank-score-badge">{row['score']:.2f}</div>
         </div>
         """, unsafe_allow_html=True)
 
-        pr_tbl = (
-            best_df[["postcode", "dist_to_city", "avg_yield", "professional_score"]]
-            .sort_values("professional_score", ascending=False)
-            .reset_index(drop=True)
-        )
-        pr_tbl.index += 1
-        pr_tbl["dist_to_city"]       = pr_tbl["dist_to_city"].map(lambda x: f"{x:.1f} km")
-        pr_tbl["avg_yield"]          = pr_tbl["avg_yield"].map(lambda x: f"{x:.1f}%")
-        pr_tbl["professional_score"] = pr_tbl["professional_score"].map(lambda x: f"{x:.0f}/100")
-        pr_tbl = pr_tbl.rename(columns={
-            "postcode": "Area",
-            "dist_to_city": "To city centre",
-            "avg_yield": "Yield",
-            "professional_score": "Score",
-        })
-
-        prof_html = "<div style='background:#1f2021;" \
-            "border-radius:6px;overflow:hidden;" \
-            "border:1px solid rgba(255,255,255,0.06);'>" \
-            "<table style='width:100%;border-collapse:collapse;" \
-            "font-family:Space Grotesk,sans-serif;'>" \
-            "<thead><tr style='border-bottom:1px solid " \
-            "rgba(74,158,255,0.15);'>" \
-            "<th style='padding:12px 16px;color:#4a9eff;" \
-            "font-size:0.6rem;font-weight:700;" \
-            "text-transform:uppercase;letter-spacing:0.14em;" \
-            "text-align:left;'>Area</th>" \
-            "<th style='padding:12px 16px;color:#4a9eff;" \
-            "font-size:0.6rem;font-weight:700;" \
-            "text-transform:uppercase;letter-spacing:0.14em;" \
-            "text-align:left;'>To City</th>" \
-            "<th style='padding:12px 16px;color:#4a9eff;" \
-            "font-size:0.6rem;font-weight:700;" \
-            "text-transform:uppercase;letter-spacing:0.14em;" \
-            "text-align:left;'>Yield</th>" \
-            "<th style='padding:12px 16px;color:#4a9eff;" \
-            "font-size:0.6rem;font-weight:700;" \
-            "text-transform:uppercase;letter-spacing:0.14em;" \
-            "text-align:right;'>Score</th>" \
-            "</tr></thead><tbody>"
-
-        for i, (_, row) in enumerate(pr_tbl.iterrows(), 1):
-            bg = "rgba(255,255,255,0.015)" if i % 2 == 0 else "transparent"
-            prof_html += (
-                "<tr style='background:" + bg + ";"
-                "border-bottom:1px solid rgba(255,255,255,0.04);'>"
-                "<td style='padding:13px 16px;color:#f1ffef;"
-                "font-weight:700;font-size:0.88rem;'>"
-                + str(row['Area']) +
-                "</td>"
-                "<td style='padding:13px 16px;color:#b9cbb9;"
-                "font-size:0.84rem;'>"
-                + str(row['To city centre']) +
-                "</td>"
-                "<td style='padding:13px 16px;color:#b9cbb9;"
-                "font-size:0.84rem;font-family:monospace;'>"
-                + str(row['Yield']) +
-                "</td>"
-                "<td style='padding:13px 16px;color:#4a9eff;"
-                "font-weight:800;font-size:0.84rem;"
-                "font-family:monospace;text-align:right;'>"
-                + str(row['Score']) +
-                "</td></tr>"
+        pc_data = filtered[filtered['postcode'] == row['postcode']]
+        why_parts = rec_reasons(row['postcode'], ranked, data, persona)
+        with st.expander(f"Why {row['postcode']} ranked #{rk}"):
+            for wp in why_parts:
+                st.markdown(f"**▸** {wp}")
+            st.caption(
+                f"Avg price: £{row['avg_price']:,.0f} · "
+                f"Score: {row['score']:.3f} · "
+                f"Based on {len(pc_data)} data points"
             )
 
-        prof_html += "</tbody></table></div>"
-        st.markdown(prof_html, unsafe_allow_html=True)
 
-    st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
+# ════════════════════════════════ MAP ════════════════════════════════════════
+with tab_map:
+    map_agg = filtered.groupby('postcode').agg(
+        avg_rent=('avg_rent', 'mean'),
+        avg_price=('avg_price', 'mean'),
+        yield_pct=('yield_percent', 'mean'),
+        dist_city=('distance_to_city_center_km', 'mean'),
+        dist_uni=('distance_to_university_km', 'mean'),
+    ).reset_index()
+    map_agg = map_agg.merge(ranked[['postcode', 'rank', 'score']], on='postcode', how='left')
+    map_agg['lat'] = map_agg['postcode'].map(
+        lambda x: POSTCODE_COORDS.get(x, (53.47, -2.24))[0])
+    map_agg['lon'] = map_agg['postcode'].map(
+        lambda x: POSTCODE_COORDS.get(x, (53.47, -2.24))[1])
 
-    cs2, cp2 = st.columns(2)
-
-    with cs2:
-        stud_sorted = best_df.sort_values("student_score", ascending=False)
-        fig_s = px.bar(
-            stud_sorted,
-            x="postcode",
-            y="student_score",
-            color="student_score",
-            color_continuous_scale=[[0, "#14201b"], [1, "#00ff88"]],
-            text=stud_sorted["student_score"].map(lambda x: f"{x:.0f}"),
-        )
-        fig_s.update_traces(textposition="outside", textfont=dict(color="#ffffff", size=10))
-        fig_s = chart(fig_s, "Student suitability score", 330)
-        fig_s.update_layout(coloraxis_showscale=False, xaxis_title="", yaxis_title="Score")
-        st.plotly_chart(fig_s, use_container_width=True)
-
-    with cp2:
-        prof_sorted = best_df.sort_values("professional_score", ascending=False)
-        fig_p = px.bar(
-            prof_sorted,
-            x="postcode",
-            y="professional_score",
-            color="professional_score",
-            color_continuous_scale=[[0, "#141d2c"], [1, "#63a6ff"]],
-            text=prof_sorted["professional_score"].map(lambda x: f"{x:.0f}"),
-        )
-        fig_p.update_traces(textposition="outside", textfont=dict(color="#ffffff", size=10))
-        fig_p = chart(fig_p, "Professional suitability score", 330)
-        fig_p.update_layout(coloraxis_showscale=False, xaxis_title="", yaxis_title="Score")
-        st.plotly_chart(fig_p, use_container_width=True)
-
-# ──────────────────────────────────────────────────────────────────────────────
-# TAB 4: TRENDS
-# ──────────────────────────────────────────────────────────────────────────────
-with tab4:
-    st.markdown("""
-    <p class='sec'>Rent trend and six-month forecast</p>
-    <p class='sec-desc'>
-        This view tracks average monthly rent over time and extends it using a simple linear trend.
-        It is intentionally lightweight: good for directional portfolio storytelling rather than formal forecasting.
-    </p>
-    <div class='info-box'>
-        <strong>Interpret carefully:</strong> the forecast is a straight-line extension of the historical trend.
-        Real-world rents respond to supply, demand, seasonality, local policy, and macroeconomic factors not modelled here.
-    </div>
-    """, unsafe_allow_html=True)
-
-    trend_df = compute_monthly_trend(df).sort_values("date").copy()
-    trend_df["date_str"] = trend_df["date"].dt.strftime("%b %Y")
-    trend_df["n"]        = np.arange(len(trend_df))
-
-    fig_t = go.Figure()
-
-    fig_t.add_trace(go.Scatter(
-        x=trend_df["date_str"],
-        y=trend_df["avg_rent"],
-        mode="lines+markers",
-        name="Actual",
-        line=dict(color="#00ff88", width=2.5),
-        marker=dict(size=7, color="#00ff88", line=dict(color="#0d0d18", width=2)),
-    ))
-
-    if len(trend_df) >= 3:
-        mdl = LinearRegression()
-        mdl.fit(trend_df["n"].values.reshape(-1, 1), trend_df["avg_rent"].values)
-
-        fut_n       = np.arange(len(trend_df), len(trend_df) + 6)
-        fut_y       = mdl.predict(fut_n.reshape(-1, 1))
-        last        = pd.Timestamp(trend_df["date"].max())
-        fut_dates_dt = pd.date_range(last + pd.DateOffset(months=1), periods=6, freq="MS")
-        fut_dates   = fut_dates_dt.strftime("%b %Y").tolist()
-
-        line_x = [trend_df["date_str"].iloc[-1]] + fut_dates
-        line_y = [trend_df["avg_rent"].iloc[-1]] + fut_y.tolist()
-
-        fig_t.add_trace(go.Scatter(
-            x=line_x,
-            y=line_y,
-            mode="lines+markers",
-            name="Forecast",
-            line=dict(color="#63a6ff", width=2.2, dash="dash"),
-            marker=dict(size=5, color="#63a6ff"),
-        ))
-
-        upper = [v * 1.04 for v in fut_y]
-        lower = [v * 0.96 for v in fut_y]
-
-        fig_t.add_trace(go.Scatter(
-            x=fut_dates + fut_dates[::-1],
-            y=upper + lower[::-1],
-            fill="toself",
-            fillcolor="rgba(99,166,255,0.10)",
-            line=dict(color="rgba(0,0,0,0)"),
-            name="±4% band",
-            hoverinfo="skip",
-            showlegend=True,
-        ))
-
-    fig_t.update_layout(
-        paper_bgcolor="#0d0d18",
-        plot_bgcolor="#0d0d18",
-        font=dict(color="#5a5870", family="Space Grotesk"),
-        xaxis=dict(
-            gridcolor="rgba(255,255,255,0.03)",
-            tickangle=-40,
-            title="Month",
-            title_font=dict(color="#5a5870"),
-            tickfont=dict(color="#5a5870"),
-        ),
-        yaxis=dict(
-            gridcolor="rgba(255,255,255,0.03)",
-            title="Average monthly rent (£)",
-            title_font=dict(color="#5a5870"),
-            tickfont=dict(color="#5a5870"),
-        ),
-        legend=dict(bgcolor="rgba(0,0,0,0)", font=dict(color="#5a5870")),
-        margin=dict(l=16, r=16, t=16, b=16),
-        hoverlabel=dict(
-            bgcolor="#12121f",
-            bordercolor="#00ff88",
-            font_color="#ffffff",
-            font_family="Space Grotesk",
-        ),
-        height=470,
+    top_yield_map = map_agg.loc[map_agg['yield_pct'].idxmax()]
+    insight(
+        f"{top_yield_map['postcode']} shows the strongest rental yield this period "
+        f"at {top_yield_map['yield_pct']:.1f}% — "
+        f"avg rent £{top_yield_map['avg_rent']:,.0f}/mo at {top_yield_map['dist_city']:.1f}km from city."
     )
-    st.plotly_chart(fig_t, use_container_width=True)
 
-# ──────────────────────────────────────────────────────────────────────────────
-# TAB 5: MODEL
-# ──────────────────────────────────────────────────────────────────────────────
-with tab5:
-    st.markdown("""
-    <p class='sec'>Rent predictor</p>
-    <p class='sec-desc'>
-        This machine learning view estimates expected rent from property characteristics in the currently
-        filtered market. It is simple, transparent, and useful for explaining predictive logic to non-technical viewers.
-    </p>
-    <div class='info-box'>
-        <strong>Plain-English explanation:</strong> the model learns patterns from historical examples —
-        for example, larger homes or better-connected postcodes often command higher rents — and then
-        uses those patterns to estimate likely rent for similar properties.
-    </div>
-    """, unsafe_allow_html=True)
+    fig_map = px.scatter_mapbox(
+        map_agg,
+        lat='lat', lon='lon',
+        size='avg_rent',
+        color='yield_pct',
+        color_continuous_scale=[(0, '#2a2a5a'), (0.4, '#4f9cf9'), (1, '#00ff88')],
+        hover_name='postcode',
+        custom_data=['avg_rent', 'yield_pct', 'dist_city', 'rank'],
+        zoom=11.2,
+        center={'lat': 53.469, 'lon': -2.240},
+        mapbox_style='carto-darkmatter',
+        size_max=35,
+        height=500,
+    )
+    fig_map.update_traces(
+        hovertemplate=(
+            '<b>%{hovertext}</b><br>'
+            'Avg Rent: £%{customdata[0]:,.0f}/mo<br>'
+            'Yield: %{customdata[1]:.1f}%<br>'
+            'City Distance: %{customdata[2]:.1f}km<br>'
+            'Rank: #%{customdata[3]}<extra></extra>'
+        )
+    )
+    fig_map.update_layout(
+        paper_bgcolor='rgba(0,0,0,0)',
+        margin=dict(l=0, r=0, t=0, b=0),
+        coloraxis_colorbar=dict(
+            title='Yield %',
+            tickfont=dict(color='#dde2ef', size=11),
+            titlefont=dict(color='#dde2ef', size=11),
+        ),
+    )
+    st.plotly_chart(fig_map, use_container_width=True)
 
-    run_m = st.checkbox("▶ Train and run the model", value=False)
-
-    if run_m:
-        if len(df) < 10:
-            st.warning("Not enough data to train the model reliably — widen the filters and try again.")
-        else:
-            with st.spinner("Training model on filtered data…"):
-                res = run_regression(df)
-
-            m1, m2 = st.columns(2)
-            m1.metric(
-                "Average prediction error (MAE)",
-                f"£{res['mae']:,.0f}",
-                help="Typical £ difference between the prediction and the actual rent.",
-            )
-            m2.metric(
-                "Model fit (R²)",
-                f"{res['r2']:.3f} / 1.000",
-                help="Closer to 1 means the model explains more of the variation in rent.",
-            )
-
-            st.markdown("""
-            <div class='info-box' style='margin-top:16px;'>
-                <strong>How to read the results:</strong><br>
-                A lower MAE is better because the model is missing the true rent by fewer pounds on average.
-                A higher R² suggests stronger pattern capture. Since this is a synthetic dataset, treat the output
-                as a demonstration of methodology and communication rather than a market-grade production model.
+    st.subheader("Postcode Breakdown")
+    map_cols = st.columns(len(map_agg))
+    for i, (_, row) in enumerate(map_agg.sort_values('rank').iterrows()):
+        with map_cols[i]:
+            st.markdown(f"""
+            <div class="map-card">
+              <span class="map-rank-badge">#{int(row['rank'])}</span>
+              <div class="map-card-pc">{row['postcode']}</div>
+              <div class="map-card-stats">
+                £{row['avg_rent']:,.0f}/mo · {row['yield_pct']:.1f}% yield<br>
+                City {row['dist_city']:.1f}km · Uni {row['dist_uni']:.1f}km
+              </div>
             </div>
             """, unsafe_allow_html=True)
 
-# ──────────────────────────────────────────────────────────────────────────────
-# FOOTER
-# ──────────────────────────────────────────────────────────────────────────────
+
+# ════════════════════════════════ PREDICTOR ══════════════════════════════════
+with tab_pred:
+    st.subheader("Rent Predictor")
+    insight(
+        "Enter property details to estimate monthly rent. "
+        "Model trained on Manchester synthetic data 2021–2025 using Linear Regression."
+    )
+
+    col_in, col_out = st.columns([1, 1], gap='large')
+
+    with col_in:
+        st.markdown('<div class="pred-in-card">', unsafe_allow_html=True)
+        st.markdown('<div class="pred-in-title">Property Details</div>', unsafe_allow_html=True)
+
+        pred_pc = st.selectbox('Postcode', options=sorted(data['postcode'].unique()), key='pred_pc')
+        pred_type = st.selectbox('Property Type', options=sorted(data['property_type'].unique()), key='pred_type')
+        pred_size = st.slider(
+            'Property Size (sqft)',
+            int(data['property_size_sqft'].min()),
+            int(data['property_size_sqft'].max()),
+            int(data['property_size_sqft'].median()),
+            step=50, key='pred_size',
+        )
+        pred_dist_city = st.slider(
+            'Distance to City Centre (km)',
+            0.5, 10.0,
+            float(data['distance_to_city_center_km'].median()),
+            step=0.1, key='pred_dist_city',
+        )
+        pred_dist_uni = st.slider(
+            'Distance to University (km)',
+            0.5, 8.0,
+            float(data['distance_to_university_km'].median()),
+            step=0.1, key='pred_dist_uni',
+        )
+
+        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown('<div class="pred-btn">', unsafe_allow_html=True)
+        predict_clicked = st.button('Predict Rent', key='predict_btn', use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        if predict_clicked:
+            sub = data[(data['postcode'] == pred_pc) & (data['property_type'] == pred_type)]
+            if sub.empty:
+                sub = data[data['postcode'] == pred_pc]
+            med_price = float(sub['avg_price'].median())
+            med_yield = float(sub['yield_percent'].median())
+            avg_rent_pc = float(sub['avg_rent'].mean())
+
+            X_new = pd.DataFrame(
+                [[pred_pc, pred_type, med_price, med_yield,
+                  pred_size, pred_dist_city, pred_dist_uni]],
+                columns=['postcode', 'property_type', 'avg_price', 'yield_percent',
+                         'property_size_sqft', 'distance_to_city_center_km',
+                         'distance_to_university_km'],
+            )
+            X_proc = preprocessor.transform(X_new)
+            prediction = float(model.predict(X_proc)[0])
+            mae = metrics['mae']
+            r2 = metrics['r2']
+            low, high = prediction - mae, prediction + mae
+            pct = ((prediction - avg_rent_pc) / avg_rent_pc * 100) if avg_rent_pc else 0
+            direction = 'above' if pct > 0 else 'below'
+            out_of_range = (
+                pred_size < data['property_size_sqft'].min() * 0.9
+                or pred_size > data['property_size_sqft'].max() * 1.1
+            )
+
+            st.session_state['pred_result'] = dict(
+                prediction=prediction, low=low, high=high,
+                mae=mae, r2=r2, pct=abs(pct), direction=direction,
+                pc=pred_pc, out_of_range=out_of_range,
+            )
+
+    with col_out:
+        if 'pred_result' in st.session_state:
+            pr = st.session_state['pred_result']
+            warn_html = (
+                '<div class="pred-out-warn">⚠ Property size is outside typical training range — '
+                'estimate may be less reliable.</div>'
+                if pr['out_of_range'] else ''
+            )
+            st.markdown(f"""
+            <div class="pred-out-card">
+              <div class="pred-out-label">PREDICTED MONTHLY RENT</div>
+              <div class="pred-out-value">£{pr['prediction']:,.0f}</div>
+              <div class="pred-out-range">Range: £{pr['low']:,.0f} – £{pr['high']:,.0f}</div>
+              <div class="pred-out-cmp">{pr['pct']:.0f}% {pr['direction']} {pr['pc']} average</div>
+              <div class="pred-out-note">
+                Linear Regression model trained on Manchester synthetic data 2021–2025.<br>
+                R² = {pr['r2']:.3f} &nbsp;·&nbsp; MAE = £{pr['mae']:.0f}
+                {warn_html}
+              </div>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown(
+                '<div class="pred-out-card">'
+                '<div class="pred-empty">Fill in the property details and click '
+                '<strong>Predict Rent</strong> to see your estimate.</div>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+
+
+# ════════════════════════════════ TRENDS ═════════════════════════════════════
+with tab_trend:
+    st.markdown('<div class="section-wrap">', unsafe_allow_html=True)
+    st.subheader("Monthly Rent Trend")
+
+    monthly = compute_monthly_trend(filtered).sort_values('date')
+    monthly['date_str'] = monthly['date'].astype(str)
+    if len(monthly) >= 2:
+        first_v = monthly.iloc[0]['avg_rent_mean']
+        last_v = monthly.iloc[-1]['avg_rent_mean']
+        delta_pct = (last_v - first_v) / first_v * 100 if first_v else 0
+        direction_str = 'risen' if delta_pct > 0 else 'fallen'
+        insight(
+            f"Average rent has {direction_str} by £{abs(last_v - first_v):.0f} "
+            f"({abs(delta_pct):.1f}%) from {monthly.iloc[0]['date_str']} "
+            f"to {monthly.iloc[-1]['date_str']}, "
+            f"reflecting {'upward rent pressure' if delta_pct > 0 else 'softening demand'}."
+        )
+
+    fig_trend = go.Figure()
+    fig_trend.add_trace(go.Scatter(
+        x=monthly['date_str'], y=monthly['avg_rent_mean'],
+        mode='lines+markers',
+        line=dict(color='#00ff88', width=2.5),
+        marker=dict(size=6, color='#00ff88',
+                    line=dict(color='#0d0d1a', width=2)),
+        fill='tozeroy',
+        fillcolor='rgba(0,255,136,0.06)',
+        hovertemplate='%{x}<br>Avg Rent: £%{y:,.0f}<extra></extra>',
+        name='Avg Rent',
+    ))
+    dark_layout(fig_trend)
+    fig_trend.update_xaxes(tickangle=45)
+    st.plotly_chart(fig_trend, use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown('<div class="section-wrap">', unsafe_allow_html=True)
+    st.subheader("Rent Trend by Postcode")
+
+    monthly_pc = filtered.groupby(['date', 'postcode'])['avg_rent'].mean().reset_index()
+    monthly_pc['date_str'] = monthly_pc['date'].astype(str)
+    colours = ['#00ff88', '#4f9cf9', '#a855f7', '#f97316', '#f43f5e']
+    fig_pc_trend = go.Figure()
+    for i, pc in enumerate(sorted(monthly_pc['postcode'].unique())):
+        sub = monthly_pc[monthly_pc['postcode'] == pc].sort_values('date_str')
+        fig_pc_trend.add_trace(go.Scatter(
+            x=sub['date_str'], y=sub['avg_rent'],
+            mode='lines+markers',
+            name=pc,
+            line=dict(color=colours[i % len(colours)], width=2),
+            marker=dict(size=5),
+            hovertemplate=f'<b>{pc}</b><br>%{{x}}<br>£%{{y:,.0f}}/mo<extra></extra>',
+        ))
+    insight(
+        "Per-postcode trend reveals where rents are accelerating fastest. "
+        "Diverging lines signal emerging affordability gaps across the city."
+    )
+    dark_layout(fig_pc_trend, height=390)
+    fig_pc_trend.update_xaxes(tickangle=45)
+    st.plotly_chart(fig_pc_trend, use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    col_t1, col_t2 = st.columns(2)
+    with col_t1:
+        st.markdown('<div class="section-wrap">', unsafe_allow_html=True)
+        st.subheader("Price vs Rent")
+        insight("Steeper slope = stronger yield. Postcodes above the trend line offer better value.")
+        fig_pvr = px.scatter(
+            filtered, x='avg_price', y='avg_rent',
+            color='postcode',
+            symbol='property_type',
+            color_discrete_sequence=['#00ff88', '#4f9cf9', '#a855f7', '#f97316', '#f43f5e'],
+            labels={'avg_price': 'Avg Price (£)', 'avg_rent': 'Avg Rent (£)', 'postcode': 'Postcode'},
+            custom_data=['postcode', 'property_type', 'avg_price', 'avg_rent'],
+        )
+        fig_pvr.update_traces(
+            marker=dict(size=7, opacity=0.75),
+            hovertemplate='<b>%{customdata[0]}</b> %{customdata[1]}<br>'
+                          'Price: £%{customdata[2]:,.0f}<br>'
+                          'Rent: £%{customdata[3]:,.0f}/mo<extra></extra>',
+        )
+        dark_layout(fig_pvr, height=340)
+        st.plotly_chart(fig_pvr, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    with col_t2:
+        st.markdown('<div class="section-wrap">', unsafe_allow_html=True)
+        st.subheader("Yield Over Time")
+        insight("Yield compression signals rising prices outpacing rent growth — watch this metric closely.")
+        monthly_yield = filtered.groupby('date')['yield_percent'].mean().reset_index()
+        monthly_yield['date_str'] = monthly_yield['date'].astype(str)
+        fig_yield_t = go.Figure()
+        fig_yield_t.add_trace(go.Scatter(
+            x=monthly_yield['date_str'], y=monthly_yield['yield_percent'],
+            mode='lines+markers',
+            line=dict(color='#a855f7', width=2.5),
+            marker=dict(size=5, color='#a855f7'),
+            fill='tozeroy',
+            fillcolor='rgba(168,85,247,0.06)',
+            hovertemplate='%{x}<br>Yield: %{y:.2f}%<extra></extra>',
+        ))
+        dark_layout(fig_yield_t, height=340)
+        fig_yield_t.update_xaxes(tickangle=45)
+        st.plotly_chart(fig_yield_t, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+
+# ── Footer ────────────────────────────────────────────────────────────────────
 st.markdown("""
-<div class='footer'>
-    <div class='footer-brand'>Manchester Rental Intelligence</div>
-    Built by <span style='color:#00ff88; font-weight:700;'>Sajan Mathew</span> · MSc Data Science · Manchester Metropolitan University<br>
-    Synthetic 2021–2025 dataset · Portfolio concept inspired by spatial analytics, housing dashboards, and modern product-style design<br>
-    <a href='https://github.com/privsmathewz'>GitHub</a> ·
-    <a href='https://linkedin.com/in/sajan-mathew-ab0965257'>LinkedIn</a>
+<div class="page-footer">
+  <div class="footer-col">Manchester Rental Intelligence — Built by Sajan Mathew</div>
+  <div class="footer-col footer-mid">manchester-homes.streamlit.app</div>
+  <div class="footer-col">
+    <a href="https://github.com/privsmathewz" target="_blank">GitHub</a>
+    &nbsp;·&nbsp;
+    <a href="https://linkedin.com/in/sajanmathew" target="_blank">LinkedIn</a>
+  </div>
 </div>
 """, unsafe_allow_html=True)

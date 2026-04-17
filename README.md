@@ -1,53 +1,60 @@
-# Manchester Rental and Affordability Dashboard
+# Manchester Rental Price Analysis
 
-An interactive Streamlit dashboard analysing rental prices, yields, and affordability across Greater Manchester postcodes. Built as a portfolio project for MSc Data Science at Manchester Metropolitan University.
+This repository contains a data analysis project exploring rental prices and property characteristics in Manchester, UK. The goal is to understand how factors like location, number of bedrooms, furnishings, and inclusion of bills influence rental costs, and to build models that estimate rent prices.
+
+## Project Overview
+
+Rising housing costs are a major concern for students and working professionals in Manchester. Understanding the drivers of rent helps tenants make informed decisions and property owners set fair prices. In this project we:
+
+- Clean and prepare datasets on rental listings in Manchester.
+- Perform exploratory data analysis (EDA) to uncover patterns in price distribution, bedroom counts, furnished vs. unfurnished properties, and inclusion of bills.
+- Visualize trends across neighbourhoods and property types.
+- Develop predictive models (e.g. linear regression, random forest) to estimate rent based on property features.
+- Summarize insights and provide recommendations for renters and landlords.
 
 ## Features
 
-- Interactive filters by postcode, property type, and date range
-- 4 KPI summary metrics (avg rent, avg price, avg yield, highest yield postcode)
-- Affordability scoring by postcode (rent 60% + distance to city 40%)
-- Best areas ranking for students vs professionals
-- Rent and yield comparison charts by postcode
-- Monthly trend analysis (Jan–Oct 2025)
-- Price vs rent scatter analysis by property type
-- Linear regression rent prediction model with MAE and R²
+- **Data preprocessing:** Handling missing values, converting features to numerical/categorical types, and encoding categorical variables.
+- **Exploratory analysis:** Price histograms, box plots, correlation matrices, and geospatial visualizations to examine how rent varies across factors.
+- **Predictive modelling:** Building and evaluating regression models to predict rent amounts.
+- **Results and insights:** Interpretation of model coefficients and feature importances to understand the key drivers of rent.
+- **Future work:** Suggestions for deploying the model as a simple pricing tool or incorporating additional features like proximity to transport or amenities.
 
-## How to Run Locally
-
-```bash
-git clone https://github.com/privsmathewz/manchester-rental-price-analysis
-cd manchester-rental-price-analysis
-pip install -r requirements.txt
-streamlit run streamlit_app.py
-```
-
-## Project Structure
+## Repository Structure
 
 ```
-├── data/
-│   └── sample_rental_data_small.csv   # Synthetic 2025 rental dataset (60 rows)
-├── src/
-│   ├── __init__.py
-│   └── analysis_utils.py              # All data processing and modelling functions
-├── streamlit_app.py                   # Main dashboard application
-├── requirements.txt
-└── README.md
+.
+├── data/          # Raw and processed datasets (CSV or parquet files)
+├── notebooks/     # Jupyter notebooks for EDA, modeling, and visualization
+├── src/           # Python scripts for data loading, cleaning, and modeling
+├── images/        # Plots and figures used in the analysis
+└── README.md      # Project overview and instructions
 ```
 
-## Data Sources
+## Getting Started
 
-- **Synthetic dataset** representing plausible 2025 Manchester rental market conditions across postcodes M1, M3, M5, M13, M14 — portfolio prototype only
-- Ward boundary methodology inspired by [Trafford Data Lab](https://www.trafforddatalab.io/)
-- Open data approach inspired by [Open Data Manchester](https://www.opendatamanchester.org.uk/)
-- Index methodology inspired by [GMODA Digital Exclusion Risk Index](https://www.gmca.gov.uk/)
-- Public sector precedent: [GMCA Cost of Living Dashboard](https://www.gmca.gov.uk/our-work/economy/cost-living)
-- Next version will integrate real **ONS Private Rental Market Summary Statistics** and **HM Land Registry UK HPI** data
+To reproduce the analysis or run the notebooks locally:
 
-## Built By
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/privsmathewz/manchester-rental-price-analysis.git
+   cd manchester-rental-price-analysis
+   ```
 
-**Sajan Mathew**
-MSc Data Science, Manchester Metropolitan University
+2. **Set up a virtual environment and install dependencies**
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate  # On Windows use venv\Scripts\activate
+   pip install -r requirements.txt
+   ```
 
-- GitHub: [github.com/privsmathewz](https://github.com/privsmathewz)
-- LinkedIn: [linkedin.com/in/sajan-mathew-ab0965257](https://linkedin.com/in/sajan-mathew-ab0965257)
+3. **Explore the notebooks**
+   Open the notebooks in the `notebooks/` folder using Jupyter Notebook or JupyterLab to walk through the EDA and modeling steps.
+
+## Contributing
+
+Contributions are welcome! If you have ideas for additional analyses, improved modeling techniques, or new visualizations, feel free to open an issue or submit a pull request.
+
+## License
+
+This project is licensed under the MIT License – see the [LICENSE](LICENSE) file for details.

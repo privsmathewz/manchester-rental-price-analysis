@@ -1,0 +1,48 @@
+// backend/prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Source {
+  id           Int             @id @default(autoincrement())
+  title        String
+  sourceName   String
+  url          String          @unique
+  publishedDate DateTime?
+  accessedDate DateTime
+  summary      String
+
+  rentalListings RentalListing[]
+
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+}
+
+model RentalListing {
+  id                        Int       @id @default(autoincrement())
+  postcode                  String
+  propertyType              String
+  avgRent                   Float
+  avgPrice                  Float
+  yieldPercent              Float
+  propertySizeSqft          Int?
+  distanceToCityCenterKm    Float?
+  distanceToUniversityKm    Float?
+  date                      String
+
+  sourceId                  Int
+  source                    Source    @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
+
+  @@index([postcode])
+  @@index([propertyType])
+  @@index([date])
+  @@index([sourceId])
+}
