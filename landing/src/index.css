@@ -1,0 +1,191 @@
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+
+@import "tailwindcss";
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: #060810;
+  color: #ffffff;
+  font-family: 'Space Grotesk', sans-serif;
+  overflow-x: hidden;
+}
+
+.font-syne   { font-family: 'Syne', sans-serif; }
+.font-grotesk { font-family: 'Space Grotesk', sans-serif; }
+
+/* ── Custom scrollbar ─────────────────────────────────────────────────────── */
+::-webkit-scrollbar       { width: 4px; }
+::-webkit-scrollbar-track { background: #060810; }
+::-webkit-scrollbar-thumb { background: rgba(0,255,136,0.3); border-radius: 2px; }
+
+/* ── Animated hero grid ───────────────────────────────────────────────────── */
+@keyframes gridDrift {
+  0%   { background-position: 0 0; }
+  100% { background-position: 60px 60px; }
+}
+.hero-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(0,255,136,0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,255,136,0.045) 1px, transparent 1px);
+  background-size: 60px 60px;
+  animation: gridDrift 10s linear infinite;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* ── Live pulsing dot ─────────────────────────────────────────────────────── */
+@keyframes livePulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(0,255,136,0.65); }
+  60%       { box-shadow: 0 0 0 5px rgba(0,255,136,0); }
+}
+.live-dot {
+  width: 7px;
+  height: 7px;
+  background: #00ff88;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+  animation: livePulse 1.8s ease-in-out infinite;
+}
+
+/* ── Headline gradient text ───────────────────────────────────────────────── */
+.headline-gradient {
+  background: linear-gradient(118deg, #ffffff 20%, #b0ffd8 55%, #00ff88 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── CTA ghost button hover ───────────────────────────────────────────────── */
+.ghost-btn {
+  transition: border-color 0.25s ease, color 0.25s ease !important;
+}
+.ghost-btn:hover {
+  border-color: #00ff88 !important;
+  color: #00ff88 !important;
+}
+
+/* ── Pulse strip card ─────────────────────────────────────────────────────── */
+@keyframes shimmerMove {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+.pulse-card {
+  position: relative;
+  overflow: hidden;
+  background: #111128;
+  border: 1px solid #2a2a5a;
+  border-radius: 12px;
+  padding: 22px 24px;
+  cursor: default;
+}
+.pulse-shimmer {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #00ff88, transparent);
+  background-size: 200% 100%;
+  animation: shimmerMove 2.8s linear infinite;
+}
+
+/* ── Browser mockup ───────────────────────────────────────────────────────── */
+.browser-frame {
+  background: #0d0d1a;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 40px 80px rgba(0,0,0,0.6), 0 0 60px rgba(0,255,136,0.06);
+}
+.browser-chrome {
+  background: #161628;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.browser-dots { display: flex; gap: 6px; }
+.browser-dots span { width: 10px; height: 10px; border-radius: 50%; display: block; }
+.browser-address {
+  flex: 1;
+  background: rgba(255,255,255,0.05);
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 10px;
+  color: rgba(255,255,255,0.3);
+  font-family: 'Space Grotesk', sans-serif;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.browser-content { height: 340px; overflow: hidden; }
+
+/* ── Marquee ──────────────────────────────────────────────────────────────── */
+.marquee-wrapper { overflow: hidden; white-space: nowrap; }
+
+@keyframes marqueeScroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.marquee-track {
+  display: inline-flex;
+  align-items: center;
+  animation: marqueeScroll 24s linear infinite;
+}
+.marquee-pill {
+  display: inline-block;
+  padding: 8px 22px;
+  margin: 0 8px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 100px;
+  font-size: 13px;
+  color: rgba(255,255,255,0.55);
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── Feature grid card hover ──────────────────────────────────────────────── */
+.feat-card {
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* ── Neon utilities ───────────────────────────────────────────────────────── */
+.neon-text {
+  color: #00ff88;
+  text-shadow: 0 0 20px rgba(0,255,136,0.5), 0 0 40px rgba(0,255,136,0.2);
+}
+
+/* ── Responsive ───────────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .product-grid   { grid-template-columns: 1fr !important; }
+  .browser-frame  { display: none !important; }
+}
+@media (max-width: 768px) {
+  .feature-grid   { grid-template-columns: repeat(2,1fr) !important; }
+  .pulse-row      { grid-template-columns: repeat(2,1fr) !important; }
+  .footer-grid    { grid-template-columns: 1fr !important; }
+  .footer-right   { text-align: left !important; }
+  .footer-center  { text-align: left !important; }
+  .hero-section   { padding: 120px 24px 60px !important; }
+  .section-pad    { padding: 60px 24px !important; }
+  .nav-links      { display: none !important; }
+}
+@media (max-width: 480px) {
+  .feature-grid   { grid-template-columns: 1fr !important; }
+}

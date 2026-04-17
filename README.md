@@ -1,60 +1,107 @@
-# Manchester Rental Price Analysis
+# Manchester Rental Intelligence Platform
 
-This repository contains a data analysis project exploring rental prices and property characteristics in Manchester, UK. The goal is to understand how factors like location, number of bedrooms, furnishings, and inclusion of bills influence rental costs, and to build models that estimate rent prices.
+**Live dashboard:** https://manchester-homes.streamlit.app  
+**Landing page:** https://madchesterhomes.netlify.app
 
-## Project Overview
+---
 
-Rising housing costs are a major concern for students and working professionals in Manchester. Understanding the drivers of rent helps tenants make informed decisions and property owners set fair prices. In this project we:
+## What it does
 
-- Clean and prepare datasets on rental listings in Manchester.
-- Perform exploratory data analysis (EDA) to uncover patterns in price distribution, bedroom counts, furnished vs. unfurnished properties, and inclusion of bills.
-- Visualize trends across neighbourhoods and property types.
-- Develop predictive models (e.g. linear regression, random forest) to estimate rent based on property features.
-- Summarize insights and provide recommendations for renters and landlords.
+Manchester Rental Intelligence is a data product that aggregates synthetic rental market data across Greater Manchester, surfaces affordability and yield signals by postcode, and makes them actionable through interactive visualisations, ML-powered rent prediction, and persona-driven rankings.
 
-## Features
+---
 
-- **Data preprocessing:** Handling missing values, converting features to numerical/categorical types, and encoding categorical variables.
-- **Exploratory analysis:** Price histograms, box plots, correlation matrices, and geospatial visualizations to examine how rent varies across factors.
-- **Predictive modelling:** Building and evaluating regression models to predict rent amounts.
-- **Results and insights:** Interpretation of model coefficients and feature importances to understand the key drivers of rent.
-- **Future work:** Suggestions for deploying the model as a simple pricing tool or incorporating additional features like proximity to transport or amenities.
+## Stack
 
-## Repository Structure
+Python · Streamlit · Plotly · pandas · scikit-learn · React · Framer Motion · Netlify · Streamlit Cloud
+
+---
+
+## Project structure
 
 ```
-.
-├── data/          # Raw and processed datasets (CSV or parquet files)
-├── notebooks/     # Jupyter notebooks for EDA, modeling, and visualization
-├── src/           # Python scripts for data loading, cleaning, and modeling
-├── images/        # Plots and figures used in the analysis
-└── README.md      # Project overview and instructions
+manchester-rental-pricing-analysis-site/
+├── streamlit_app.py          # App entry point — page config, filters, routing (~194 lines)
+├── src/
+│   ├── analysis_utils.py     # Data loading, aggregation, ML model training
+│   ├── styles.py             # CSS loader (load_css)
+│   ├── rankings.py           # Scoring: compute_rankings, compute_pulse, rec_reasons
+│   ├── charts.py             # dark_layout, insight helpers
+│   ├── predictor.py          # Predictor tab renderer
+│   └── tabs/
+│       ├── overview.py       # Overview tab renderer
+│       ├── rankings.py       # Rankings tab renderer
+│       ├── map.py            # Live Map tab renderer + POSTCODE_COORDS
+│       ├── trends.py         # Trends tab renderer
+│       └── about.py          # About/methodology tab renderer
+├── data/
+│   └── sample_rental_data_small.csv
+├── landing/                  # React + Vite landing page
+│   └── src/App.jsx
+├── requirements.txt
+└── README.md
 ```
 
-## Getting Started
+---
 
-To reproduce the analysis or run the notebooks locally:
+## Data
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/privsmathewz/manchester-rental-price-analysis.git
-   cd manchester-rental-price-analysis
-   ```
+The platform uses a **synthetic dataset** modelled on Greater Manchester rental market patterns (2021–2025).
 
-2. **Set up a virtual environment and install dependencies**
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate  # On Windows use venv\Scripts\activate
-   pip install -r requirements.txt
-   ```
+| Column | Description |
+|--------|-------------|
+| `date` | Month (YYYY-MM, parsed as Period) |
+| `postcode` | District: M1, M3, M5, M13, M14 |
+| `property_type` | Studio, 1-bed, HMO |
+| `avg_rent` | Average monthly rent (£) |
+| `avg_price` | Average purchase price (£) |
+| `yield_percent` | Gross rental yield (%) |
+| `property_size_sqft` | Property size (sq ft) |
+| `distance_to_city_center_km` | Distance to Manchester city centre (km) |
+| `distance_to_university_km` | Distance to major universities (km) |
 
-3. **Explore the notebooks**
-   Open the notebooks in the `notebooks/` folder using Jupyter Notebook or JupyterLab to walk through the EDA and modeling steps.
+> Values are modelled approximations, not live market data.
 
-## Contributing
+---
 
-Contributions are welcome! If you have ideas for additional analyses, improved modeling techniques, or new visualizations, feel free to open an issue or submit a pull request.
+## Personas
 
-## License
+Each persona applies a weighted composite score across normalised postcode metrics.
 
-This project is licensed under the MIT License – see the [LICENSE](LICENSE) file for details.
+| Persona | Weights |
+|---------|---------|
+| **Student** | 40% low rent · 40% low university distance · 20% low city distance |
+| **Professional** | 50% low city distance · 30% low rent · 20% high yield |
+| **Investor** | 60% high yield · 40% low avg price |
+| **Explorer** | 25% each — yield · rent · city distance · university distance |
+
+---
+
+## Forecast methodology
+
+The 6-month rent forecast uses Linear Regression fitted on historical monthly average rent values per postcode, extrapolating forward using engineered time features. This is a directional indicator only. Confidence intervals reflect training MAE and should not be used for investment decisions.
+
+---
+
+## Running locally
+
+```bash
+pip install -r requirements.txt
+streamlit run streamlit_app.py
+```
+
+The landing page (React + Vite):
+
+```bash
+cd landing
+npm install
+npm run dev
+```
+
+---
+
+## Built by
+
+**Sajan Mathew** · MSc Data Science · Manchester Metropolitan University  
+Graduate Route visa — full UK right to work until June 2028  
+[github.com/privsmathewz](https://github.com/privsmathewz) · [linkedin.com/in/sajanmathew](https://linkedin.com/in/sajanmathew)
