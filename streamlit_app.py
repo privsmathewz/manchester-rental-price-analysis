@@ -22,7 +22,7 @@ st.set_page_config(
     page_title="Manchester Rental Intelligence",
     page_icon="🏠",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 st.markdown("""
@@ -475,6 +475,17 @@ hr { border-color: var(--border) !important; margin: 1.8rem 0 !important; }
   .page-footer { flex-direction: column; text-align: center; }
   .pred-in-card, .pred-out-card { padding: 18px; }
 }
+
+[data-testid="stSidebar"] { display: none !important; }
+[data-testid="collapsedControl"] { display: none !important; }
+
+.topbar-wrap {
+  background: #0d0d1a;
+  border: 1px solid #1e1e3a;
+  border-radius: 12px;
+  padding: 16px 20px 8px;
+  margin: 16px 0 20px;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -620,62 +631,63 @@ def dark_layout(fig: go.Figure, title: str = '', height: int = 370) -> go.Figure
     return fig
 
 
-# ── Sidebar ───────────────────────────────────────────────────────────────────
+# ── Data ──────────────────────────────────────────────────────────────────────
 data = load_dataset()
 
-with st.sidebar:
-    st.markdown('<div class="sidebar-logo">🏙 MANCHESTER HOMES</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sidebar-lbl">PERSONA</div>', unsafe_allow_html=True)
+# ── Hero ───────────────────────────────────────────────────────────────────────
+st.markdown("""
+<div class="hero-wrap">
+  <div class="hero-eyebrow">GREATER MANCHESTER · LIVE RENTAL INTELLIGENCE</div>
+  <div class="hero-headline">FIND YOUR PLACE.</div>
+  <p class="hero-sub">Live rental intelligence across Greater Manchester.
+  Compare postcodes by affordability, yield, demand, and 6-month forecast trend.</p>
+</div>
+""", unsafe_allow_html=True)
 
-    persona = st.radio(
-        "persona",
-        options=['Student', 'Professional', 'Investor', 'Explorer'],
-        horizontal=True,
-        label_visibility='collapsed',
-        key='persona',
-    )
-
-    pc_hex = PERSONA_COLOUR[persona]
-    r, g_c, b = int(pc_hex[1:3], 16), int(pc_hex[3:5], 16), int(pc_hex[5:7], 16)
-    st.markdown(
-        f'<div class="persona-badge" style="background:rgba({r},{g_c},{b},0.12);'
-        f'border-color:{pc_hex};color:{pc_hex};">Active: {persona}</div>',
-        unsafe_allow_html=True,
-    )
-
-    st.divider()
-    st.markdown('<div class="sidebar-lbl">FILTERS</div>', unsafe_allow_html=True)
-
-    all_postcodes = sorted(data['postcode'].unique())
-    all_types = sorted(data['property_type'].unique())
-    def_types = [t for t in PERSONA_TYPES[persona] if t in all_types]
-
-    selected_postcodes = st.multiselect(
-        "Postcodes", options=all_postcodes, default=all_postcodes,
-    )
-    selected_types = st.multiselect(
-        "Property types", options=all_types,
-        default=def_types if def_types else all_types,
-        key=f'types_{persona}',
-    )
-
-    # ── THE FIX: convert to Python date objects so Streamlit slider works ──
-    min_date = data['date'].min().to_timestamp().date()
-    max_date = data['date'].max().to_timestamp().date()
-    date_range = st.slider(
-        "Date range",
-        min_value=min_date,
-        max_value=max_date,
-        value=(min_date, max_date),
-        format="MMM YYYY",
-    )
-
-    st.divider()
-    st.markdown(
-        '<div class="sidebar-footer">Manchester Rental Intelligence<br>Built by Sajan Mathew</div>',
-        unsafe_allow_html=True,
-    )
-
+# ── Top Filter Bar ─────────────────────────────────────────────────────────────
+with st.container():
+    st.markdown('<div class="topbar-wrap">', unsafe_allow_html=True)
+    col_p, col_pc, col_type, col_date = st.columns([1.5, 2, 2, 2])
+    with col_p:
+        st.markdown('<div class="sidebar-lbl">PERSONA</div>', unsafe_allow_html=True)
+        persona = st.radio(
+            "persona",
+            options=['Student', 'Professional', 'Investor', 'Explorer'],
+            horizontal=True,
+            label_visibility='collapsed',
+            key='persona',
+        )
+        pc_hex = PERSONA_COLOUR[persona]
+        r, g_c, b = int(pc_hex[1:3], 16), int(pc_hex[3:5], 16), int(pc_hex[5:7], 16)
+        st.markdown(
+            f'<div class="persona-badge" style="background:rgba({r},{g_c},{b},0.12);'
+            f'border-color:{pc_hex};color:{pc_hex};">Active: {persona}</div>',
+            unsafe_allow_html=True,
+        )
+    with col_pc:
+        all_postcodes = sorted(data['postcode'].unique())
+        selected_postcodes = st.multiselect(
+            "Postcodes", options=all_postcodes, default=all_postcodes,
+        )
+    with col_type:
+        all_types = sorted(data['property_type'].unique())
+        def_types = [t for t in PERSONA_TYPES[persona] if t in all_types]
+        selected_types = st.multiselect(
+            "Property types", options=all_types,
+            default=def_types if def_types else all_types,
+            key=f'types_{persona}',
+        )
+    with col_date:
+        min_date = data['date'].min().to_timestamp().date()
+        max_date = data['date'].max().to_timestamp().date()
+        date_range = st.slider(
+            "Date range",
+            min_value=min_date,
+            max_value=max_date,
+            value=(min_date, max_date),
+            format="MMM YYYY",
+        )
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # ── Filter ─────────────────────────────────────────────────────────────────────
 mask = (
@@ -694,20 +706,10 @@ model, metrics, preprocessor = get_model()
 pulse = compute_pulse(data)
 ranked = compute_rankings(filtered, persona)
 
-
-# ── Hero ───────────────────────────────────────────────────────────────────────
 t = pulse['trend']
 trend_class = 'pulse-up' if t[0] == 'Rising' else 'pulse-flat'
 
-st.markdown(f"""
-<div class="hero-wrap">
-  <div class="hero-eyebrow">GREATER MANCHESTER · LIVE RENTAL INTELLIGENCE</div>
-  <div class="hero-headline">FIND YOUR PLACE.</div>
-  <p class="hero-sub">Live rental intelligence across Greater Manchester.
-  Compare postcodes by affordability, yield, demand, and 6-month forecast trend.</p>
-</div>
-""", unsafe_allow_html=True)
-
+# ── Market Pulse ───────────────────────────────────────────────────────────────
 st.markdown(f"""
 <div class="pulse-grid">
   <div class="pulse-card">
